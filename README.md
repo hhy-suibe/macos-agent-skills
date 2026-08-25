@@ -7,21 +7,46 @@
 
 ## clash-rule：Clash Verge 分流规则管理
 
-用 Clash Verge Rev 的人多半遇到过：某个国内网站突然要滑块验证或者打不开，原因是它被代理了。手动改配置有一堆坑：规则链文件三个键缺一个会被 Verge 静默忽略，运行时配置几十万字节，整体重排容易改坏。
+代理开着，打开银行、学校图书馆或者某个国内网站，突然要滑块验证、要手机验证码，甚至直接打不开。你多半遇到过这种事。
 
-这个 skill 让 AI 通过一个自带脚本完成所有操作（下例从仓库根目录出发；把脚本装进 PATH 后可直接写 `clash-rule`）：
+原因通常不是网站坏了，而是它的流量被 Clash 送去了国外节点。网站一看访问者是外国 IP，就触发了风控。解决办法是告诉 Clash「访问这个网站时直连，别绕道」，也就是加一条分流规则。
+
+加规则本身不难，难的是改对地方。手动改配置有三个坑：
+
+* 有两层配置要同时改对：一层来自订阅（机场下发的），一层是正在运行的。只改运行层，订阅下次更新时你的规则就没了；只改订阅层，当下不生效。
+* 正在运行的那层是个几十万字符的 YAML 大文件，格式极其讲究，手动改错一个缩进整个文件就废了。
+* 就算都改对了，浏览器和网站之间的旧连接还挂着，不重连看不到效果。
+
+这个 skill 让 AI 替你把坑全踩掉。你只管说人话，使用现场大概长这样：
+
+> 你：「天眼查打开要滑块，帮我看看是不是被代理了」
+> AI：（自动体检）查到 Clash 被切到了全局模式，你之前加的所有规则都不起作用。已切回规则模式 ✅ 天眼查已加直连 ✅ 验证生效
+
+能交代给 AI 的事就这几类：「让 XX 直连」「XX 走代理」「屏蔽 XX 广告域名」「撤销上次给 XX 加的规则」「查查为什么我加的规则不生效」。
+
+背后实际执行的是下面这些命令（从仓库根目录出发；装进 PATH 后可直接写 `clash-rule`）。想自己在终端敲，也一样用：
 
 ```bash
-clash-rule/scripts/clash-rule direct tianyancha.com    # 域名及全部子域直连
-clash-rule/scripts/clash-rule proxy  openai.com        # 走代理
-clash-rule/scripts/clash-rule reject  ads.example.com  # 屏蔽
-clash-rule/scripts/clash-rule remove  tianyancha.com   # 撤销规则
-clash-rule/scripts/clash-rule status                   # 诊断（global 模式架空、分组指错等常见病）
+clash-rule/scripts/clash-rule direct tianyancha.com    # 这个域名和它所有子域名走直连
+clash-rule/scripts/clash-rule proxy  openai.com        # 这个域名改走代理
+clash-rule/scripts/clash-rule reject  ads.example.com  # 屏蔽（对付广告、追踪域名）
+clash-rule/scripts/clash-rule remove  tianyancha.com   # 后悔了，撤销这条规则
+clash-rule/scripts/clash-rule status                   # 体检：查为什么规则不生效
 ```
 
-脚本同时写入订阅的规则链文件（订阅更新后规则仍保留）和运行时配置，然后自动热重载内核、断开这些域名的存量旧连接、打印生效验证。幂等、原子写入、改动前自动留 `.bak` 备份。
+脚本背后做了什么不用记，说人话版就四条：
 
-**环境**，macOS + Clash Verge Rev + python3（需 PyYAML）+ curl。代理分组默认名「🚀 节点选择」，和你的订阅不一致时用环境变量 `CLASH_RULE_PROXY_GROUP` 换。
+* **两层都写、写在安全的位置**，你的规则放在订阅之外，机场更新订阅冲不掉它
+* **动手前先自动备份**，改坏了拿备份一还原就回来
+* **改完立刻生效**，让正在运行的 Clash 马上重新加载，并掐断这个网站的旧连接，刷新页面就能看到效果
+* **当场自证**，最后打印一行验证，告诉你这条规则是不是真的排进了生效名单
+
+**环境**，macOS + Clash Verge Rev + python3（需 PyYAML，没有就 `pip3 install --user pyyaml`）+ curl（系统自带）。
+
+两个常见问题：
+
+* **proxy 命令报「分组不存在」？** 默认往「🚀 节点选择」这个组里送，中文订阅大多叫这个名。你的订阅分组名不一样时，先执行 `export CLASH_RULE_PROXY_GROUP="你的分组名"`。
+* **加了规则网站还是不对劲？** 先跑 `status`。它专查几种疑难杂症：比如内核被切到了全局模式（所有分流规则整体失效，全部流量走一个节点），比如订阅的「全球直连」分组被指到了某个节点（所有本该直连的流量都被引去代理）。每查出一个问题，它都会附上对应的修复命令。
 
 ## disk-cleanup：Mac 磁盘清理报告
 
@@ -69,7 +94,7 @@ cp clash-rule/scripts/clash-rule ~/.local/bin/ && chmod +x ~/.local/bin/clash-ru
 
 Two macOS skills for AI coding agents that follow the SKILL.md convention (Claude Code, ZCode, etc.):
 
-* **clash-rule**: manage Clash Verge Rev routing rules (direct / proxy / reject / undo / diagnose) through a battle-tested script. Writes to both the subscription merge file and runtime config, hot-reloads the core, drops stale connections, and verifies the result. Idempotent, atomic, with automatic backups.
+* **clash-rule**: proxy on, and a Chinese site suddenly demands CAPTCHAs? This skill lets your AI fix Clash Verge Rev routing with one command: make a site go direct / through the proxy / blocked, undo a rule, or run a health check that explains why a rule isn't taking effect (global-mode hijack, wrong group selection, etc.). The bundled script writes both config layers, hot-reloads the core, drops stale connections, and verifies the result. Idempotent, atomic, with automatic backups.
 * **disk-cleanup**: read-only disk scan that builds an interactive HTML cleanup report with safety tiers and drill-down details, plus a localhost-only server so the user can delete items from the web page (to Trash by default). A two-layer protected-paths blocklist guards system data and credentials at both build and execution time.
 
 ## License
