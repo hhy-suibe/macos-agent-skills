@@ -120,3 +120,4 @@ cd "$OUT" && nohup python3 清理报告服务器.py > 服务器.log 2>&1 & disow
 - `assets/report.template.html` — 报告模板（占位符 `__SCAN_DATA__` / `__SCAN_DATE__` / `__SCAN_META__` / `__REPORT_TOKEN__`）
 - `references/design-kami.md` — Kami 设计规范全文（视觉层规则的最终依据，文件头附来源与许可）
 - `references/tokens-kami.json` — Kami 注册色板 token 表（同上来源）
+- `references/LICENSE-kami` — 上游 tw93/Kami 的 MIT 许可全文（转发其文件的合规要求）

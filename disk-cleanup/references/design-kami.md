@@ -1,9 +1,9 @@
 # Design System
 
 <!-- 来源与许可：本文件是 https://github.com/tw93/Kami 仓库 references/design.md 的原样副本
-     （2026-08-25 快照，main@68c1dfad6e75）。Kami 采用 MIT License，版权归上游作者所有；
-     此处仅作为 disk-cleanup 报告模板的视觉规范参考，上游更新以原仓库为准。
-     同目录 tokens-kami.json 同样摘自该仓库 references/tokens.json。 -->
+     （2026-08-25 快照，main@68c1dfad6e75）。Kami 采用 MIT License，版权归上游作者所有，
+     许可全文见同目录 LICENSE-kami；此处仅作为 disk-cleanup 报告模板的视觉规范参考，
+     上游更新以原仓库为准。同目录 tokens-kami.json 同样摘自该仓库 references/tokens.json。 -->
 
 ## Principles
 

@@ -17,7 +17,7 @@
      —— 所有行的大小数字、按钮都右对齐到同一条竖线
    · 层级：区块 = 编号 + 图标 + 标题 + 构成条 + 行；节奏统一
    ═══════════════════════════════════════════════ */
-@font-face{font-family:"TsangerJinKai02";src:url("https://cdn.jsdelivr.net/gh/AlfredoSequeworthy/TsangerJinKai02@main/TsangerJinKai02-W04.woff2") format("woff2");font-weight:400 500;font-style:normal;font-display:swap}
+@font-face{font-family:"TsangerJinKai02";src:url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W04.ttf") format("truetype");font-weight:400 500;font-style:normal;font-display:swap}
 :root{
   --bg:#f5f4ed; --card:#faf9f5; --ink:#141413; --sub:#504e49; --faint:#6b6a64;
   --line:#e8e6dc; --line2:#d9d5c6;
@@ -26,7 +26,6 @@
   --amber:#8b4513; --amberbg:#f0e0d8; --amberline:#e0c5b3;
   --gray:#6b6a64; --graybg:#edeade;
   --red:#a03e32; --redbg:#f3e3de; --redline:#ddc3ba;
-  --blue:#2D5A8A; --pink:#1B365D; --orange:#8b4513;
   --serif:"TsangerJinKai02","Source Han Serif SC","Noto Serif SC","Songti SC",Georgia,serif;
   --r-lg:14px; --r-md:10px; --r-sm:7px;
   --sh1:0 4px 24px rgba(20,20,19,.05);
@@ -48,8 +47,6 @@ svg{display:inline-block;vertical-align:middle}
 /* ══════════ Hero（羊皮纸画布：衬线大标题 + 墨蓝点缀，无渐变无光斑） ══════════ */
 .hero{position:relative;color:var(--ink);padding:40px 0 28px;overflow:hidden;
   background:var(--bg);border-bottom:1px solid var(--line)}
-.hero::before{content:none}
-.orb{display:none}
 .hero .wrap{position:relative;z-index:1}
 .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .logo{width:48px;height:48px;border-radius:12px;flex:none;
@@ -318,7 +315,6 @@ footer code{background:var(--graybg);border-radius:7px;padding:1px 8px;font-size
 <body>
 
 <header class="hero">
-  <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
   <div class="wrap">
     <div class="brand">
       <div class="logo">
@@ -431,7 +427,7 @@ var SF = {safe:["b-safe","可直删"],caution:["b-caution","谨慎"],report:["b-
 var DONUT_COLORS = ["#1B365D","#2D5A8A","#4a6b52","#9c7a3c","#8b4513","#a03e32","#8a887f"];
 var sel = {}, curF = "all", curQ = "", sel_done = {};
 
-function esc(x){var d=document.createElement("div");d.textContent=x==null?"":String(x);return d.innerHTML;}
+function esc(x){var d=document.createElement("div");d.textContent=x==null?"":String(x);return d.innerHTML.replace(/"/g,"&quot;");}
 function fmt(b){if(!b||b<=0)return "未知";var u=["B","KB","MB","GB","TB"],i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return (i===0?b:b.toFixed(b>=100?1:2))+" "+u[i];}
 function fmtCnt(c){return (c==null||c<0)?"":c.toLocaleString("zh-Hans-CN")}
 function fileUrl(p){return "file://"+encodeURI(p).replace(/#/g,"%23").replace(/\?/g,"%3F");}
@@ -666,14 +662,14 @@ function renderDonut(){
   var R=62,C=2*Math.PI*R,gap=4,svg="",acc=0;
   parts.forEach(function(p,i){
     var frac=p.b/total,len=Math.max(0,frac*C-gap);
-    svg+='<circle data-i="'+i+'" cx="74" cy="74" r="'+R+'" fill="none" stroke="'+DONUT_COLORS[i]+'" stroke-width="15" stroke-linecap="round" stroke-dasharray="'+len.toFixed(1)+' '+C.toFixed(1)+'" stroke-dashoffset="'+(-acc*C).toFixed(1)+'" style="transition:stroke-width .15s;cursor:pointer"/>';
+    svg+='<circle data-i="'+i+'" cx="74" cy="74" r="'+R+'" fill="none" stroke="'+DONUT_COLORS[i%DONUT_COLORS.length]+'" stroke-width="15" stroke-linecap="round" stroke-dasharray="'+len.toFixed(1)+' '+C.toFixed(1)+'" stroke-dashoffset="'+(-acc*C).toFixed(1)+'" style="transition:stroke-width .15s;cursor:pointer"/>';
     acc+=frac;
   });
   document.getElementById("donutSvg").innerHTML=svg;
   document.getElementById("donutC1").textContent=relative?"TOP":usedGB+" GB";
   document.getElementById("donutC2").textContent=relative?"空间构成占比":"已用 / "+((DATA.meta&&DATA.meta.disk&&DATA.meta.disk.total)||"");
   var lg="";
-  parts.forEach(function(p,i){lg+='<div class="li" data-i="'+i+'"><span class="sw" style="background:'+DONUT_COLORS[i]+'"></span>'+esc(p.n)+"<b class='num'>"+fmt(p.b)+"</b></div>";});
+  parts.forEach(function(p,i){lg+='<div class="li" data-i="'+i+'"><span class="sw" style="background:'+DONUT_COLORS[i%DONUT_COLORS.length]+'"></span>'+esc(p.n)+"<b class='num'>"+fmt(p.b)+"</b></div>";});
   if(!relative)lg+='<div class="li"><span class="sw" style="background:#6b6a64"></span>系统与其它<b class="num">'+((total-used)/1073741824).toFixed(0)+" GB</b></div>";
   document.getElementById("legend").innerHTML=lg;
   function hi(i,on){
@@ -779,8 +775,8 @@ function confirmAndDelete(ids){
   document.getElementById("mIco").className="mico";
   if(SERVER){
     var cmdNodes=nodes.filter(function(n){return n.act&&n.act.t==="cmd";});
-    var APPMAP=[["xinWeChat","微信"],["Google","Chrome"],["/Code","VS Code"],["wpsoffice","WPS"],["LarkShell","飞书"],["tencent.meeting","腾讯会议"],["Firefox","Firefox"],["Citro Labs","ego lite"],["CindyGlobal","Cindy"],["bilibili","哔哩哔哩"],["GoodNotes","GoodNotes"]];
-    var needApps=[];nodes.forEach(function(n){if(n.s==="caution"&&n.p){APPMAP.forEach(function(kv){if(n.p.indexOf(kv[0])>=0&&needApps.indexOf(kv[1])<0)needApps.push(kv[1]);});}});
+    var APPMAP=[["xinWeChat","微信"],["xwechat","微信"],["Google/Chrome","Chrome"],["Application Support/Code","VS Code"],[".vscode","VS Code"],["wpsoffice","WPS"],["LarkShell","飞书"],["tencent.meeting","腾讯会议"],["Firefox","Firefox"],["bilibili","哔哩哔哩"],["GoodNotes","GoodNotes"]];
+    var needApps=[];nodes.forEach(function(n){pathsOf(n).forEach(function(p){APPMAP.forEach(function(kv){if(p.indexOf(kv[0])>=0&&needApps.indexOf(kv[1])<0)needApps.push(kv[1]);});});});
     var appWarn=needApps.length
       ?'<div class="warn">本批包含 '+esc(needApps.join(" / "))+' 的应用数据，建议先退出对应应用再删除，避免应用边写边删；其余缓存/日志项不受影响。</div>'
       :'<div class="okmsg">本批不含应用数据，无需退出任何应用——用浏览器打开本页面也不受影响。</div>';
