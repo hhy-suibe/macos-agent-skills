@@ -51,7 +51,9 @@ clash-rule/scripts/clash-rule status                   # 体检：查为什么�
 
 ## disk-cleanup：Mac 磁盘清理报告
 
-扫描全盘常见垃圾位置（缓存、临时文件、日志、开发工具缓存、下载文件夹、微信等大目录内部），生成一个交互式 HTML 报告：每一项标了安全级别（绿=可直接删 / 黄=谨慎 / 灰=只讲是什么、不给删按钮），可以一层层下钻看明细。配套一个只监听 127.0.0.1 的小服务器，网页上点删除按钮就直接执行，默认进废纸篓，可以反悔。
+扫描全盘常见垃圾位置（缓存、临时文件、日志、开发工具缓存、下载文件夹、微信等大目录内部），生成一个交互式 HTML 报告：每一项标了安全级别（绿=可直接删 / 褐=谨慎 / 灰=只讲是什么、不给删按钮），可以一层层下钻看明细。配套一个只监听 127.0.0.1 的小服务器，网页上点删除按钮就直接执行，默认进废纸篓，可以反悔。
+
+报告页面是「羊皮纸」视觉风格——米黄纸面、墨蓝点缀、衬线字标题，出自开源设计系统 [tw93/Kami](https://github.com/tw93/Kami)（MIT），其设计规范随 skill 附在 `disk-cleanup/references/` 里。
 
 安全设计是这个 skill 的核心：
 
@@ -96,7 +98,7 @@ cp clash-rule/scripts/clash-rule ~/.local/bin/ && chmod +x ~/.local/bin/clash-ru
 Two macOS skills for AI coding agents that follow the SKILL.md convention (Claude Code, ZCode, etc.):
 
 * **clash-rule**: proxy on, and a Chinese site suddenly demands CAPTCHAs? This skill lets your AI fix Clash Verge Rev routing with one command: make a site go direct / through the proxy / blocked, undo a rule, or run a health check that explains why a rule isn't taking effect (global-mode hijack, wrong group selection, etc.). The bundled script writes both config layers, hot-reloads the core, drops stale connections, and verifies the result. Idempotent, atomic, with automatic backups.
-* **disk-cleanup**: read-only disk scan that builds an interactive HTML cleanup report with safety tiers and drill-down details, plus a localhost-only server so the user can delete items from the web page (to Trash by default). A two-layer protected-paths blocklist guards system data and credentials at both build and execution time.
+* **disk-cleanup**: read-only disk scan that builds an interactive HTML cleanup report with safety tiers and drill-down details, plus a localhost-only server so the user can delete items from the web page (to Trash by default). A two-layer protected-paths blocklist guards system data and credentials at both build and execution time. Report UI follows the parchment design language of [tw93/Kami](https://github.com/tw93/Kami) (MIT), whose spec ships in `disk-cleanup/references/`.
 
 ## License
 

@@ -91,14 +91,24 @@ cd "$OUT" && nohup python3 清理报告服务器.py > 服务器.log 2>&1 & disow
 - **数据过期**：重跑第 2、4、6 步即可刷新报告。
 - **权限受限**：`~/.Trash`、`MobileSync/Backup` 常被 TCC 挡住（Operation not permitted），标「大小未知」并给用户开权限指引，不要反复重试。
 
-## 模板设计规范（v4，改动模板前必读）
+## 模板设计规范（v5 羊皮纸风，改动模板前必读）
 
-模板早期版本曾因「视觉杂乱、图标大小不齐、缺乏框架条理」被用户批评，v4 为此确立了硬性规则，**修改模板时不得破坏**：
+模板早期版本曾因「视觉杂乱、图标大小不齐、缺乏框架条理」被批评，v4 为此确立了结构硬规则；v5（2026-08-25）把视觉层整体切换为 **Kami 羊皮纸风**（源自 [tw93/Kami](https://github.com/tw93/Kami)，MIT。完整规范在 `references/design-kami.md`，色板在 `references/tokens-kami.json`，改视觉前先读其 Color / Typography / Depth 三章）。
+
+### 视觉层规则（Kami 羊皮纸，v5 新增）
+
+1. **画布羊皮纸 `#f5f4ed`，卡片象牙白 `#faf9f5`，永不纯白**；所有灰必须是暖灰（R≈G>B，黄褐底色），禁止冷蓝灰（如 #f0f1f5、#98a0ad）。
+2. **唯一装饰色 = 墨蓝 `#1B365D`**（链接、图标底、强调数字、构成条以外的点缀），覆盖面积 ≤5%。绿(safe)/褐(caution)/暖灰(report)/暖红(删除)是**语义色**不算装饰，但必须用暗哑的暖调版本（值见模板 `:root`），禁止荧光亮色。
+3. **衬线扛标题与数字**：`--serif`（TsangerJinKai02，CDN 加载，离线回落 Songti SC）只用于 h1/h2/h3、区块标题、大小数字 `.size`、统计值 `.stat .v`，字重锁 500；正文与 UI 控件保持无衬线，标签字重 ≤600。
+4. **禁渐变、禁硬投影、禁光斑**：深度只来自象牙白填充 + 耳语阴影 `0 4px 24px rgba(20,20,19,.05)`；按钮态用环形阴影 `0 0 0 1px`。深色块（pre.cmd、toast）用暖黑 `#141413` 而非冷蓝黑。
+5. 无暗色模式（`prefers-color-scheme` 覆盖已删）：羊皮纸是唯一画布，这是 Kami 的立场，别加回来。
+
+### 结构层规则（继承 v4，不得破坏）
 
 1. **图标只用一套内联 SVG**（`IC` 对象，24 viewBox / stroke 2 / round cap），任何位置**禁止用 emoji 当图标**——emoji 在不同系统渲染大小不一，正是"图片大小不齐"的根源。新增图标走 `ic(path)` 工厂。
-2. **数据行是严格 4 列网格** `--rowgrid: 22px minmax(0,1fr) 92px 264px`（勾选/内容/大小/操作），所有行和子项共用同一模板，保证大小数字与按钮右对齐到同一条竖线。改列宽改 `--rowgrid` 一处即可。
+2. **数据行是严格 4 列网格** `--rowgrid: 22px minmax(0,1fr) 92px 276px`（勾选/内容/大小/操作），所有行和子项共用同一模板，保证大小数字与按钮右对齐到同一条竖线。改列宽改 `--rowgrid` 一处即可。
 3. **统一组件尺寸**：徽章统一高（都有 `border:1px solid transparent` 防高低差）、按钮统一高 29px、图标钮 `.abtn` 29×29、子项内 26px。tab 里的计数只能写进 `.tc` span（tab 内有其它子元素，不能整改 textContent）。
-4. **分组卡片统一解剖**：SVG 图标 + `SECTION NN` 编号 + 标题 + 右侧汇总胶囊 + 头部下方全宽 4px 构成条（绿/黄/灰）。编号由 render() 按出现顺序生成，空分类自动跳过。
+4. **分组卡片统一解剖**：SVG 图标 + `SECTION NN` 编号 + 标题 + 右侧汇总胶囊 + 头部下方全宽 4px 构成条（绿/褐/灰）。编号由 render() 按出现顺序生成，空分类自动跳过。
 5. **子项递归渲染**：`kidHtml()` 必须递归（微信数据是三层：条目→图片/视频/会话→按月份/会话），`toggleKids` 按 `kids-<id>` 通用查找天然支持任意深度；`.kid > .kids` 需 `grid-column:1/-1`。破坏递归会让"按月勾选删除"承诺落空（曾因不递归丢过整层月份项）。
 6. 交付前用 headless Chrome 截图（hero/列表/展开明细/弹窗四个状态）自查一遍对齐与溢出；条件允许时用浏览器测 `getBoundingClientRect` 验证列对齐（所有 `.c-size` right、`.c-act` right 应各自唯一）。注意视觉模型会幻觉出"未对齐"——CSS 网格保证对齐时以几何测量为准。
 
@@ -108,3 +118,5 @@ cd "$OUT" && nohup python3 清理报告服务器.py > 服务器.log 2>&1 & disow
 - `scripts/build.py` — 校验 + 注入模板 + 产三件套
 - `scripts/server.py` — 本地白名单服务器（源码，被 build.py 复制为 `清理报告服务器.py`）
 - `assets/report.template.html` — 报告模板（占位符 `__SCAN_DATA__` / `__SCAN_DATE__` / `__SCAN_META__` / `__REPORT_TOKEN__`）
+- `references/design-kami.md` — Kami 设计规范全文（视觉层规则的最终依据，文件头附来源与许可）
+- `references/tokens-kami.json` — Kami 注册色板 token 表（同上来源）
