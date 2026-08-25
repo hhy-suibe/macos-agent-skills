@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mac 磁盘清理报告 · __SCAN_DATE__</title>
+<style>
+/* ═══════════════════════════════════════════════
+   设计系统 v4 —— 统一规则：
+   · 图标：只用一套内联 SVG（24 viewBox / stroke 2 / 圆角），绝不用 emoji 当图标
+   · 网格：每条数据行固定 4 列 [勾选 22px | 内容 1fr | 大小 92px | 操作 264px]
+     —— 所有行的大小数字、按钮都右对齐到同一条竖线
+   · 层级：区块 = 编号 + 图标 + 标题 + 构成条 + 行；节奏统一
+   ═══════════════════════════════════════════════ */
+:root{
+  --bg:#f5f6f8; --card:#ffffff; --ink:#16181d; --sub:#5b6270; --faint:#98a0ad;
+  --line:#e8e9ef; --line2:#d4d7e1;
+  --acc:#6d5ef2; --acc2:#8b7cf7; --accsoft:#efedfe;
+  --green:#0e9f6e; --greenbg:#e9f9f2; --greenline:#b5ecd5;
+  --amber:#d98a0b; --amberbg:#fdf6e7; --amberline:#f3ddb0;
+  --gray:#6a7280; --graybg:#f0f1f5;
+  --red:#e5484d; --redbg:#fdecec; --redline:#f6c6c8;
+  --blue:#2d7ff0; --pink:#db2777; --orange:#d97706;
+  --hero1:#0e0e13; --hero2:#191536; --hero3:#0c2233;
+  --r-lg:18px; --r-md:13px; --r-sm:9px;
+  --sh1:0 1px 2px rgba(20,22,40,.04),0 3px 12px rgba(20,22,40,.05);
+  --sh2:0 2px 6px rgba(20,22,40,.06),0 14px 36px rgba(20,22,40,.10);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --rowgrid:22px minmax(0,1fr) 92px 276px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0c0d12; --card:#15161d; --ink:#e8eaf0; --sub:#9aa3b2; --faint:#6b7280;
+    --line:#23252f; --line2:#33364a;
+    --accsoft:#232042; --greenbg:#0d2b21; --greenline:#1c5b43;
+    --amberbg:#2d2410; --amberline:#6b5220; --graybg:#1b1d26;
+    --redbg:#331518; --redline:#6e2a30;
+    --hero1:#0a0b10; --hero2:#141031; --hero3:#0a1e2e;
+    --sh1:0 1px 2px rgba(0,0,0,.5),0 4px 14px rgba(0,0,0,.4);
+    --sh2:0 4px 10px rgba(0,0,0,.5),0 18px 48px rgba(0,0,0,.55);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;padding-bottom:150px}
+button{font-family:inherit}
+b,strong{font-weight:680}
+.wrap{max-width:1140px;margin:0 auto;padding:0 22px}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+svg{display:inline-block;vertical-align:middle}
+
+/* ══════════ Hero ══════════ */
+.hero{position:relative;color:#eceef6;padding:36px 0 30px;overflow:hidden;
+  background:linear-gradient(158deg,var(--hero1) 0%,var(--hero2) 55%,var(--hero3) 100%)}
+.hero::before{content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:26px 26px;mask-image:linear-gradient(180deg,#000 0%,transparent 70%)}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.4;pointer-events:none}
+.orb.a{width:420px;height:420px;background:#5b4df0;top:-180px;left:-100px}
+.orb.b{width:360px;height:360px;background:#0e9f6e;bottom:-200px;right:-80px;opacity:.25}
+.orb.c{width:300px;height:300px;background:#2d7ff0;top:-120px;right:22%;opacity:.2}
+.hero .wrap{position:relative;z-index:1}
+.brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{width:48px;height:48px;border-radius:14px;flex:none;
+  background:linear-gradient(140deg,#7a6cf5,#22c58b);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 10px 28px rgba(109,94,242,.45)}
+.logo svg{width:25px;height:25px}
+h1{margin:0;font-size:21px;letter-spacing:.4px;font-weight:700}
+.hero .meta{color:#a2abca;font-size:12.5px;margin-top:3px}
+.pill{display:inline-flex;align-items:center;gap:7px;font-size:12px;padding:5px 13px;border-radius:99px;
+  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#cdd4ea;margin-left:auto}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:#f5a623;animation:pulse 2.2s infinite}
+.pill.on{border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1);color:#a7f3d0}
+.pill.on .dot{background:#34d399}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,166,35,.45)}70%{box-shadow:0 0 0 8px rgba(245,166,35,0)}100%{box-shadow:0 0 0 0 rgba(245,166,35,0)}}
+
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:24px}
+.stat{position:relative;border-radius:18px;padding:16px 18px 15px;display:flex;flex-direction:column;
+  background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.045));
+  border:1px solid rgba(255,255,255,.13);backdrop-filter:blur(10px);
+  transition:transform .2s ease,border-color .2s ease}
+.stat:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.3)}
+.stat .k{font-size:12px;color:#a2abca;display:flex;align-items:center;gap:7px}
+.stat .k svg{width:14px;height:14px;opacity:.9;flex:none}
+.stat .v{font-size:29px;font-weight:760;margin:5px 0 1px;letter-spacing:-.6px;line-height:1.15}
+.stat .v.g{color:#4ade80}.stat .v.a{color:#fbbf24}.stat .v.b{color:#93c5fd}
+.stat .d{font-size:11.5px;color:#8d96b8;line-height:1.55}
+.btn-mini{margin-top:12px;align-self:flex-start;border:none;border-radius:9px;padding:6px 15px;font-size:12.5px;font-weight:640;cursor:pointer;
+  background:linear-gradient(135deg,#34d399,#0ea371);color:#03271a;transition:transform .15s,box-shadow .15s}
+.btn-mini:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.45)}
+.btn-mini:active{transform:scale(.97)}
+
+/* donut */
+.donutrow{display:flex;gap:26px;align-items:center;margin-top:16px;border-radius:18px;padding:16px 22px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.donutwrap{position:relative;width:146px;height:146px;flex:none}
+.donutwrap svg{transform:rotate(-90deg)}
+.donutwrap .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.donutwrap .c b{font-size:19px;letter-spacing:-.3px}
+.donutwrap .c span{font-size:10.5px;color:#8d96b8}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 20px;flex:1;min-width:280px}
+.li{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#c2cade;padding:4px 8px;border-radius:9px;transition:background .15s}
+.li:hover,.li.hi{background:rgba(255,255,255,.08)}
+.li .sw{width:10px;height:10px;border-radius:3.5px;flex:none}
+.li b{margin-left:auto;font-weight:640;color:#eef0f7}
+.hero-tip{margin-top:14px;font-size:12.5px;color:#aab3d0;border-radius:14px;padding:11px 16px;
+  background:rgba(255,255,255,.045);border:1px dashed rgba(255,255,255,.16);line-height:1.75;
+  display:flex;gap:10px;align-items:flex-start}
+.hero-tip svg{width:15px;height:15px;flex:none;margin-top:3px;color:#fbbf24}
+
+/* ══════════ mode / toolbar ══════════ */
+.modebar{padding:12px 0 0}
+.modebar .wrap{display:flex;align-items:center;gap:10px;font-size:13px;border-radius:13px;padding:11px 17px}
+.modebar.on{background:var(--greenbg);border:1px solid var(--greenline);color:var(--green)}
+.modebar.off{background:var(--amberbg);border:1px solid var(--amberline);color:var(--amber)}
+.modebar code{background:rgba(125,125,125,.15);border-radius:7px;padding:1px 9px;font-size:12px;font-family:var(--mono)}
+.toolbar{position:sticky;top:0;z-index:50;margin-top:12px;
+  background:color-mix(in srgb,var(--bg) 84%,transparent);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--line);padding:10px 0}
+.toolbar .wrap{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:var(--graybg);border-radius:12px;padding:4px}
+.tab{border:none;background:transparent;border-radius:9px;padding:6px 14px;font-size:13px;cursor:pointer;color:var(--sub);
+  transition:all .16s;display:inline-flex;align-items:center;gap:7px}
+.tab:hover{color:var(--ink)}
+.tab.on{background:var(--card);color:var(--ink);font-weight:620;box-shadow:var(--sh1)}
+.tab .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.tab .d-safe{background:var(--green)}.tab .d-caution{background:var(--amber)}.tab .d-report{background:var(--faint)}
+.tab .tc{font-size:11px;color:var(--faint);font-weight:600}
+.tab.on .tc{color:var(--sub)}
+#q{flex:1;min-width:180px;border:1.5px solid var(--line);background:var(--card);border-radius:11px;
+  padding:8px 15px;font-size:13px;color:var(--ink);outline:none;transition:border-color .16s,box-shadow .16s}
+#q:focus{border-color:var(--acc2);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 15%,transparent)}
+#q::placeholder{color:var(--faint)}
+
+/* ══════════ 分组卡片 ══════════ */
+.group{margin-top:26px}
+.gcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh1);overflow:hidden}
+.ghead{display:flex;align-items:center;gap:13px;padding:15px 20px 13px}
+.gicon{width:38px;height:38px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center}
+.gicon svg{width:19px;height:19px}
+.gi-cache{background:color-mix(in srgb,var(--acc) 12%,transparent);color:var(--acc)}
+.gi-temp{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue)}
+.gi-logs{background:color-mix(in srgb,var(--amber) 13%,transparent);color:var(--amber)}
+.gi-dev{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
+.gi-downloads{background:color-mix(in srgb,var(--orange) 13%,transparent);color:var(--orange)}
+.gi-report{background:color-mix(in srgb,var(--pink) 11%,transparent);color:var(--pink)}
+.ghead .gt{min-width:0;flex:1}
+.gnum{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--faint);font-weight:600}
+.ghead h2{margin:1px 0 0;font-size:15.5px;letter-spacing:.3px;display:inline}
+.ghead .gsub{font-size:12px;color:var(--sub);margin-top:2px}
+.gsum{font-size:12.5px;color:var(--sub);background:var(--graybg);border-radius:99px;padding:4px 13px;white-space:nowrap;flex:none}
+.gbar{display:flex;height:4px;background:var(--graybg)}
+.gbar i{height:100%;transition:width .4s ease}
+.gbar .p-safe{background:linear-gradient(90deg,#34d399,#0e9f6e)}
+.gbar .p-caution{background:linear-gradient(90deg,#fbbf24,#d98a0b)}
+.gbar .p-report{background:var(--line2)}
+.gbody{padding:10px 12px 12px}
+
+/* ══════════ 数据行（严格 4 列网格） ══════════ */
+.row{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:8px;
+  transition:border-color .15s;overflow:hidden}
+.row:hover{border-color:var(--line2)}
+.row::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0}
+.row.s-safe::before{background:linear-gradient(180deg,#34d399,#0e9f6e)}
+.row.s-caution::before{background:linear-gradient(180deg,#fbbf24,#d98a0b)}
+.row.s-report::before{background:var(--line2)}
+.row.done{opacity:.5}
+.row.done .name{text-decoration:line-through}
+.row.off2{display:none}
+.grid{display:grid;grid-template-columns:var(--rowgrid);column-gap:12px;align-items:start;padding:12px 16px 11px 19px}
+.grid input[type=checkbox]{width:15px;height:15px;margin-top:3px;accent-color:var(--acc);cursor:pointer}
+.grid input[type=checkbox]:disabled{opacity:.25;cursor:default}
+.c-main{min-width:0}
+.l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:21px}
+.name{font-weight:650;font-size:13.5px;letter-spacing:.1px}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;border-radius:99px;padding:2px 9px;font-weight:600;white-space:nowrap;line-height:1.5;border:1px solid transparent}
+.badge .bd{width:6px;height:6px;border-radius:50%;flex:none}
+.b-safe{background:var(--greenbg);color:var(--green)}.b-safe .bd{background:var(--green)}
+.b-caution{background:var(--amberbg);color:var(--amber)}.b-caution .bd{background:var(--amber)}
+.b-report{background:var(--graybg);color:var(--gray)}.b-report .bd{background:var(--gray)}
+.b-agg{background:var(--accsoft);color:var(--acc)}.b-agg .bd{background:var(--acc)}
+.b-kids{background:var(--accsoft);color:var(--acc);cursor:pointer;transition:border-color .15s}
+.b-kids:hover{border-color:var(--acc2)}.b-kids .bd{background:var(--acc)}
+.l2{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--faint);
+  background:var(--graybg);border-radius:7px;padding:2px 8px;font-family:var(--mono);max-width:100%;min-width:0}
+.chip svg{width:11px;height:11px;flex:none}
+.chip a{color:var(--acc);text-decoration:none;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px}
+.chip a:hover{text-decoration:underline}
+.note{font-size:12px;color:var(--sub);margin-top:5px;max-width:780px;line-height:1.65}
+.c-size{text-align:right;min-width:0}
+.size{font-weight:720;font-size:14px;white-space:nowrap;letter-spacing:-.2px;line-height:21px}
+.size small{display:block;font-weight:400;font-size:10px;color:var(--faint);letter-spacing:0;line-height:1.3;margin-top:1px}
+.c-act{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;row-gap:6px;margin-top:-4px}
+.abtn,.tbtn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:29px;border-radius:var(--r-sm);
+  border:1px solid var(--line);background:var(--card);color:var(--sub);cursor:pointer;
+  transition:border-color .14s,color .14s,background .14s;font-size:12px;font-weight:560;white-space:nowrap;padding:0 10px}
+.abtn{width:29px;padding:0;flex:none}
+.abtn svg,.tbtn svg{width:13px;height:13px;flex:none}
+.abtn:hover,.tbtn:hover{border-color:var(--acc2);color:var(--acc)}
+.abtn:active,.tbtn:active{transform:scale(.95)}
+.abtn:disabled,.tbtn:disabled{opacity:.35;pointer-events:none}
+.tbtn.del{background:var(--redbg);border-color:var(--redline);color:var(--red);font-weight:640;padding:0 13px}
+.tbtn.del:hover{background:var(--red);border-color:var(--red);color:#fff}
+.tbtn.how{background:var(--accsoft);border-color:transparent;color:var(--acc)}
+.tbtn.kidsbtn .caret{transition:transform .2s;display:inline-flex}
+.tbtn.kidsbtn.openk .caret{transform:rotate(90deg)}
+
+/* ══════════ 子项明细（与父行同一套列） ══════════ */
+.kids{display:none;border-top:1px dashed var(--line);background:color-mix(in srgb,var(--graybg) 46%,transparent);padding:10px 14px 12px 38px}
+.kids.openk{display:block;animation:slidein .22s ease}
+@keyframes slidein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.khead{font-size:11.5px;color:var(--faint);margin:2px 4px 8px}
+.kid{display:grid;grid-template-columns:var(--rowgrid);column-gap:12px;align-items:start;padding:9px 10px 9px 13px;
+  border-radius:11px;margin-bottom:6px;background:var(--card);border:1px solid var(--line);transition:border-color .14s;position:relative;overflow:hidden}
+.kid:hover{border-color:var(--line2)}
+.kid::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0}
+.kid.s-safe::before{background:var(--green)}
+.kid.s-caution::before{background:var(--amber)}
+.kid.s-report::before{background:var(--line2)}
+.kid.done{opacity:.5}
+.kid.done .name{text-decoration:line-through}
+.kid > .kids{grid-column:1/-1;margin:4px 0 2px}
+.kid .name{font-size:12.5px}
+.kid .size{font-size:12.5px}
+.kid .note{font-size:11.5px;margin-top:3px}
+.kid .l2{margin-top:3px}
+.kid .chip{font-size:10px;padding:1px 7px}
+.kid input[type=checkbox]{width:13px;height:13px;margin-top:3px}
+.kid .c-act{margin-top:-5px}
+.kid .abtn{width:26px;height:26px}
+.kid .abtn svg,.kid .tbtn svg{width:12px;height:12px}
+.kid .tbtn{height:26px;font-size:11.5px;padding:0 9px}
+.kid .tbtn.del{padding:0 11px}
+
+/* ══════════ dock / modal / toast / fab ══════════ */
+.dock{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(150%);z-index:70;
+  background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(18px);
+  border:1px solid var(--line2);border-radius:18px;box-shadow:var(--sh2);
+  padding:13px 20px;display:flex;align-items:center;gap:15px;max-width:92vw;
+  transition:transform .32s cubic-bezier(.2,.9,.25,1.15)}
+.dock.show{transform:translateX(-50%) translateY(0)}
+.dock .info{font-size:13.5px;white-space:nowrap}
+.dock .info b{color:var(--green)}
+.dock button{border:none;border-radius:12px;padding:10px 20px;font-size:13.5px;font-weight:660;cursor:pointer;transition:all .15s}
+.dock button:active{transform:scale(.96)}
+#dockGo{background:linear-gradient(135deg,#f0565b,#dc2d38);color:#fff;box-shadow:0 8px 22px rgba(229,72,77,.4)}
+#dockGo:hover{box-shadow:0 10px 28px rgba(229,72,77,.55)}
+#dockClear{background:var(--graybg);color:var(--sub)}
+
+.mask{position:fixed;inset:0;background:rgba(9,10,16,.55);backdrop-filter:blur(5px);z-index:90;
+  display:none;align-items:center;justify-content:center;padding:18px}
+.mask.show{display:flex;animation:fadein .16s}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.mbox{background:var(--card);border:1px solid var(--line2);border-radius:22px;max-width:700px;width:100%;max-height:86vh;
+  overflow:auto;box-shadow:var(--sh2);animation:pop .24s cubic-bezier(.2,.9,.3,1.12)}
+@keyframes pop{from{transform:scale(.95) translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.mhead{padding:20px 24px 0;display:flex;align-items:flex-start;gap:12px}
+.mico{width:42px;height:42px;border-radius:13px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--redbg);color:var(--red)}
+.mico svg{width:20px;height:20px}
+.mico.info{background:var(--accsoft);color:var(--acc)}
+.mhead h3{margin:0;font-size:17px;flex:1;padding-top:9px}
+.mhead .x{border:none;background:var(--graybg);color:var(--sub);width:32px;height:32px;border-radius:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.mhead .x svg{width:14px;height:14px}
+.mhead .x:hover{background:var(--line);color:var(--ink)}
+.mbody{padding:14px 24px 22px}
+.mlist{max-height:236px;overflow:auto;border:1px solid var(--line);border-radius:13px;margin:6px 0 10px;background:var(--bg)}
+.mi{display:flex;gap:9px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12.5px}
+.mi:last-child{border-bottom:none}
+.mi .st{width:18px;text-align:center;color:var(--faint);flex:none}
+.mi.wrow .st{color:var(--amber);font-weight:700}
+.mi .sz{margin-left:auto;color:var(--sub);white-space:nowrap}
+.mi.ok .st{color:var(--green)}.mi.bad{color:var(--red)}
+.mprog{height:6px;border-radius:99px;background:var(--graybg);overflow:hidden;margin:4px 0 12px;display:none}
+.mprog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#6d5ef2,#22c58b);transition:width .3s;border-radius:99px}
+.permrow{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--sub);margin:10px 0;
+  background:var(--graybg);border-radius:12px;padding:10px 14px}
+.permrow input{accent-color:var(--red);width:15px;height:15px}
+.warn{background:var(--amberbg);border:1px solid var(--amberline);color:var(--amber);border-radius:13px;
+  padding:11px 16px;font-size:12.5px;margin:10px 0;line-height:1.7}
+.okmsg{background:var(--greenbg);border:1px solid var(--greenline);color:var(--green);border-radius:13px;
+  padding:11px 16px;font-size:12.5px;margin:10px 0;line-height:1.7}
+.macts{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.macts button{border:none;border-radius:13px;padding:12px 24px;font-size:14px;font-weight:660;cursor:pointer;transition:all .15s}
+.macts button:active{transform:scale(.97)}
+#mYes{background:linear-gradient(135deg,#f0565b,#dc2d38);color:#fff;flex:1;box-shadow:0 8px 22px rgba(229,72,77,.35)}
+#mYes.green{background:linear-gradient(135deg,#34d399,#0ea371);box-shadow:0 8px 22px rgba(16,185,129,.35)}
+#mNo{background:var(--graybg);color:var(--sub)}
+pre.cmd{background:#0c0f1c;color:#c9d6f0;border-radius:13px;padding:15px;font-size:11.5px;overflow:auto;
+  white-space:pre-wrap;word-break:break-all;font-family:var(--mono);line-height:1.75}
+.steps{padding-left:20px;font-size:13px;color:var(--sub)}
+.steps li{margin:5px 0}
+.howto{background:var(--accsoft);border-radius:13px;padding:14px 18px;font-size:13px;white-space:pre-line;line-height:1.85;color:var(--ink)}
+
+#toast{position:fixed;top:22px;left:50%;transform:translateX(-50%) translateY(-90px);z-index:99;
+  background:#14151c;color:#fff;border-radius:13px;padding:11px 22px;font-size:13px;box-shadow:var(--sh2);
+  transition:transform .32s cubic-bezier(.2,.9,.25,1.15);max-width:86vw;border:1px solid rgba(255,255,255,.1)}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.ok{background:linear-gradient(135deg,#0e9f6e,#0b7a55)}
+#toast.err{background:linear-gradient(135deg,#e5484d,#bf2d37)}
+#fab{position:fixed;right:22px;bottom:24px;width:42px;height:42px;border-radius:13px;border:1px solid var(--line2);
+  background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);color:var(--sub);cursor:pointer;
+  box-shadow:var(--sh1);display:none;z-index:60;align-items:center;justify-content:center;transition:all .15s}
+#fab.show{display:flex}
+#fab:hover{color:var(--acc);border-color:var(--acc2);transform:translateY(-2px)}
+#fab svg{width:17px;height:17px}
+
+/* ══════════ footer ══════════ */
+footer{margin:44px 0 26px;font-size:13px;color:var(--sub)}
+footer h3{color:var(--ink);font-size:15px;margin:24px 0 10px}
+footer details{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:13px 19px;margin-bottom:8px;box-shadow:var(--sh1)}
+footer summary{cursor:pointer;font-weight:620;color:var(--ink)}
+footer details[open] summary{margin-bottom:6px}
+footer code{background:var(--graybg);border-radius:7px;padding:1px 8px;font-size:12px;font-family:var(--mono)}
+
+@media (max-width:820px){
+  .grid,.kid{grid-template-columns:20px minmax(0,1fr);row-gap:7px;padding:11px 13px 11px 17px}
+  .c-size{grid-column:2;text-align:left;display:flex;align-items:baseline;gap:8px}
+  .size small{display:inline;margin-left:2px}
+  .c-act{grid-column:2;justify-content:flex-start;margin-top:0}
+  .kids{padding-left:16px}
+  .pill{margin-left:0}
+  .donutrow{flex-direction:column}
+  .chip a{max-width:200px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 13h6"/><path d="M12 10v6"/></svg>
+      </div>
+      <div>
+        <h1>Mac 磁盘清理报告</h1>
+        <div class="meta">深度扫描 __SCAN_DATE__ · __SCAN_META__ · 全程只读，未动任何文件</div>
+      </div>
+      <span class="pill" id="pill"><span class="dot"></span><span id="pillText">检测增强模式…</span></span>
+    </div>
+
+    <div class="statgrid">
+      <div class="stat">
+        <div class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>可直接删除 · 删后自动重建</div>
+        <div class="v g num" id="safeSum">0</div>
+        <div class="d" id="safeCnt">–</div>
+        <button class="btn-mini" onclick="selectAllSafe()">一键勾选这些</button>
+      </div>
+      <div class="stat">
+        <div class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>谨慎清理 · 有点代价</div>
+        <div class="v a num" id="cauSum">0</div>
+        <div class="d" id="cauCnt">–</div>
+      </div>
+      <div class="stat">
+        <div class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>空间大头里藏着的安全项</div>
+        <div class="v b num" id="hiddenSum">0</div>
+        <div class="d" id="hiddenCnt">–</div>
+      </div>
+    </div>
+
+    <div class="donutrow">
+      <div class="donutwrap" id="donutwrap">
+        <svg width="146" height="146" viewBox="0 0 148 148" id="donutSvg"></svg>
+        <div class="c"><b class="num" id="donutC1">–</b><span id="donutC2"></span></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="hero-tip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <div><b>怎么用：</b>① 先点上方「一键勾选」把绿色安全项清掉（全进废纸篓，可反悔）；② 「空间大头」不是不能删——点每条的「明细」展开内部构成，绿色/黄色子项可单独删；③ 删除默认进废纸篓，确认无误后再清空废纸篓；少数「命令型」条目（清废纸篓 / brew 清理等）会直接执行，弹窗里会单独标出。</div>
+    </div>
+  </div>
+</header>
+
+<div class="modebar" id="modebar" style="display:none"><div class="wrap" id="modebarIn"></div></div>
+
+<div class="toolbar"><div class="wrap">
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-f="all"><span class="tl">全部</span></button>
+    <button class="tab" data-f="safe"><span class="dot d-safe"></span><span class="tl">可直删</span><span class="tc"></span></button>
+    <button class="tab" data-f="caution"><span class="dot d-caution"></span><span class="tl">谨慎</span><span class="tc"></span></button>
+    <button class="tab" data-f="report"><span class="dot d-report"></span><span class="tl">空间大头</span><span class="tc"></span></button>
+  </div>
+  <input id="q" type="search" placeholder="搜索名称、路径或说明…（如：微信 / Chrome / dmg / 2025-06）">
+</div></div>
+
+<main class="wrap" id="main"></main>
+
+<footer class="wrap">
+  <h3>常见问题</h3>
+  <details><summary>点了「删除」会发生什么？能反悔吗？</summary>
+    <p>增强模式下：文件先<b>移入废纸篓</b>（和手动拖进废纸篓一样，随时能拖回来），确认没问题后再清空废纸篓真正释放空间。勾选「彻底删除」则跳过废纸篓直接删除。少数「命令型」条目（清空废纸篓、brew 清理、清理旧临时文件）会直接执行、不经过废纸篓——弹窗里会单独列出。所有删除动作都记录在同目录的 <code>清理记录.log</code> 里。删除前请退出对应 App（微信、Chrome、VS Code…），避免数据库损坏。</p></details>
+  <details><summary>为什么需要「启动清理报告.command」？</summary>
+    <p>浏览器有安全沙箱：纯网页<b>永远不可能</b>直接删你电脑上的文件（否则随便一个恶意网页就能清空你的硬盘）。所以报告配了一个只监听本机(127.0.0.1)的小服务器：它只认报告里列出的白名单动作，网页发「删某一项」的编号，它来执行。不用时关掉终端窗口即可。没启动它时报告照常能看，删除按钮退化为生成终端命令。</p></details>
+  <details><summary>微信数据到底怎么清？</summary>
+    <p>分三层：① <b>纯缓存</b>（内置浏览器缓存/日志/下载残留）——退出微信后直接删，绝不碰聊天记录；② <b>聊天媒体</b>（图片/视频/文件）——点开明细能看到<b>按月份/按会话</b>的分布，勾选旧月份删（聊天记录文字还在，但历史媒体文件会打不开且服务器不补发，删前先另存重要的）；③ <b>聊天数据库</b>——绝对不能删。也可以用微信自带 设置→通用→存储空间。</p></details>
+  <details><summary>Docker 虚拟磁盘怎么清？</summary>
+    <p>那是一个虚拟磁盘文件（Docker.raw），所有镜像/容器/卷都打包在里面，<b>直接删文件会损坏 Docker</b>。正确姿势：启动 Docker Desktop → Troubleshoot → Clean / Purge data；或终端 <code>docker system prune -a</code>。清完后稀疏磁盘会自动收缩。</p></details>
+  <details><summary>废纸篓和 iPhone 备份为什么「大小未知」？</summary>
+    <p>被 macOS 隐私保护（TCC）挡住了。想统计：系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 把「终端」加进去。iPhone 备份管理入口：访达边栏选手机 → 管理备份。</p></details>
+  <details><summary>本次扫描覆盖与发现</summary><ul id="scanNotes"></ul></details>
+  <p id="footLine">报告生成：ZCode 磁盘清理 · __SCAN_DATE__</p>
+</footer>
+
+<div class="dock" id="dock">
+  <div class="info" id="dockInfo">已选 0 项</div>
+  <button id="dockGo" onclick="batchDelete()">清理所选项</button>
+  <button id="dockClear" onclick="clearSel()">取消</button>
+</div>
+
+<div class="mask" id="mask">
+  <div class="mbox">
+    <div class="mhead">
+      <div class="mico" id="mIco"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></div>
+      <h3 id="mTitle">确认</h3>
+      <button class="x" onclick="hideModal()" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </div>
+    <div class="mbody" id="mBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<button id="fab" onclick="scrollTo({top:0,behavior:'smooth'})" title="回到顶部">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+</button>
+
+<script>
+"use strict";
+/*DATA-START*/
+var DATA = __SCAN_DATA__;
+/*DATA-END*/
+
+/* ══════════ 基础 ══════════ */
+var TOKEN = "__REPORT_TOKEN__";
+var SERVER = false;
+var ITEMS = DATA.items, BYID = {};
+var SF = {safe:["b-safe","可直删"],caution:["b-caution","谨慎"],report:["b-report","看明细"]};
+var DONUT_COLORS = ["#8b7cf7","#22c58b","#f5a623","#38bdf8","#e879f9","#fb7185","#94a3b8"];
+var sel = {}, curF = "all", curQ = "", sel_done = {};
+
+function esc(x){var d=document.createElement("div");d.textContent=x==null?"":String(x);return d.innerHTML;}
+function fmt(b){if(!b||b<=0)return "未知";var u=["B","KB","MB","GB","TB"],i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return (i===0?b:b.toFixed(b>=100?1:2))+" "+u[i];}
+function fmtCnt(c){return (c==null||c<0)?"":c.toLocaleString("zh-Hans-CN")}
+function fileUrl(p){return "file://"+encodeURI(p).replace(/#/g,"%23").replace(/\?/g,"%3F");}
+function shq(p){return "'"+String(p).replace(/'/g,"'\\''")+"'";}
+function collectIds(list){var r=[];list.forEach(function(n){r.push(n);if(n.kids)collectIds(n.kids).forEach(function(k){r.push(k);});});return r;}
+var ALL = collectIds(ITEMS);
+ALL.forEach(function(n){BYID[n.id]=n;});
+function kidsCleanSum(n){var s=0;(n.kids||[]).forEach(function(k){if(k.act&&(k.s==="safe"||k.s==="caution")&&k.b>0)s+=k.b;});return s;}
+function selectable(n){return !!(n.act && !n.agg && n.s!=="report");}
+function pathsOf(n){return (n.act&&n.act.paths)||n.dp||[n.p];}
+function cmdFor(n){
+  if(!n.act)return "";
+  if(n.act.t==="cmd")return n.act.c;
+  var ps=n.act.t==="trash"?pathsOf(n):[];
+  var bad=!ps||!ps.length||ps.some(function(p){return !p||p==="/"||p==="/Users"||p=="/private"||p==="/private/tmp"||p.split("/").length<4;});
+  if(bad)return "# [跳过] 此项仅用于报告，未生成删除命令";
+  return "rm -rf "+ps.map(shq).join(" ");
+}
+
+/* ══════════ 服务器 API ══════════ */
+function api(route,body){
+  return fetch(route,{method:"POST",headers:{"Content-Type":"application/json","X-Report-Token":TOKEN},
+    body:JSON.stringify(body||{})}).then(function(r){return r.json();});
+}
+async function detectMode(){
+  var pill=document.getElementById("pill"),pt=document.getElementById("pillText");
+  var bar=document.getElementById("modebar"),bin=document.getElementById("modebarIn");
+  if(location.protocol==="http:"||location.protocol==="https:"){
+    try{var r=await fetch("/api/ping").then(function(x){return x.json();});if(r&&r.ok)SERVER=true;}catch(e){}
+  }
+  if(SERVER){
+    pill.classList.add("on");pt.textContent="增强模式 · 点击即删";
+    bar.style.display="block";bar.className="modebar on";
+    bin.innerHTML="<b>增强模式已开启</b>：删除按钮直接生效（默认移入废纸篓，可反悔），每次删除都记录在 清理记录.log。";
+  }else{
+    pt.textContent="静态模式";
+    bar.style.display="block";bar.className="modebar off";
+    bin.innerHTML="当前是静态模式（只能看，删除按钮退化为复制终端命令）。要解锁<b>点击直接删除</b>：双击同文件夹里的 <code>启动清理报告.command</code>，会自动打开增强版页面。";
+  }
+}
+
+/* ══════════ 统一图标库（唯一图标来源：内联 SVG，24 viewBox / stroke 2） ══════════ */
+function ic(p,sw){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+(sw||2)+'" stroke-linecap="round" stroke-linejoin="round">'+p+"</svg>";}
+var IC = {
+  open:  ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  copy:  ic('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
+  trash: ic('<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/>'),
+  broom: ic('<path d="m14 3 7 7-4 4-7-7z"/><path d="M10 7 3 14v7h7l4-4"/>'),
+  chev:  ic('<path d="m9 6 6 6-6 6"/>',2.4),
+  cal:   ic('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+  file:  ic('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'),
+  folder:ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  cache: ic('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>'),
+  temp:  ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'),
+  logs:  ic('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>'),
+  dev:   ic('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'),
+  dl:    ic('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>'),
+  report:ic('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')
+};
+var CATS = {
+  cache:{t:"应用与系统缓存",sub:"删了会自动重建，最安全的一批",icon:"cache",gi:"gi-cache"},
+  temp:{t:"临时文件",sub:"程序工作中产生的临时产物",icon:"temp",gi:"gi-temp"},
+  logs:{t:"日志",sub:"历史运行记录，删了不影响使用",icon:"logs",gi:"gi-logs"},
+  dev:{t:"开发工具",sub:"npm / 扩展 / 虚拟环境等，按需清理",icon:"dev",gi:"gi-dev"},
+  downloads:{t:"下载与废纸篓",sub:"安装包、杂物与待清空的废纸篓",icon:"dl",gi:"gi-downloads"},
+  report:{t:"空间大头 · 点「明细」看内部构成",sub:"不是不能删——里面藏了大量可清理项",icon:"report",gi:"gi-report"}
+};
+
+/* ══════════ 渲染 ══════════ */
+function metaChips(n){
+  var h = "";
+  if(n.mt)h+='<span class="chip">'+IC.cal+esc(n.mt)+"</span>";
+  if(n.cnt!=null&&n.cnt>=0)h+='<span class="chip">'+IC.file+fmtCnt(n.cnt)+" 个文件</span>";
+  if(n.link===false){
+    h+='<span class="chip">'+IC.folder+"主目录下隐藏文件夹（.vscode / .trae 等）</span>";
+  }else{
+    h+='<span class="chip">'+IC.folder+'<a href="'+esc(fileUrl(n.p))+'" data-id="'+n.id+'" onclick="return pathLink(this)" title="点击打开位置">'+esc(n.p)+"</a></span>";
+  }
+  return h;
+}
+function actionBtns(n,kid){
+  var h = "";
+  if(n.link!==false)h+='<button class="abtn" data-id="'+n.id+'" onclick="openIt(this)" title="在访达中打开">'+IC.open+"</button>";
+  h+='<button class="abtn" data-id="'+n.id+'" onclick="copyPath(this)" title="复制路径">'+IC.copy+"</button>";
+  if(selectable(n))h+='<button class="tbtn del" data-id="'+n.id+'" onclick="delOne(this)">'+IC.trash+"删除…</button>";
+  else if(n.sp==="wechat"||n.sp==="docker"||n.sp==="iosbackup")h+='<button class="tbtn how" data-id="'+n.id+'" onclick="howTo(this)" title="查看安全的清理步骤">'+IC.broom+"正确清理</button>";
+  else if(!n.kids||!n.kids.length)h+='<button class="tbtn how" data-id="'+n.id+'" onclick="howTo(this)" title="为什么没有删除按钮">'+IC.broom+"如何处理</button>";
+  return h;
+}
+function rowHtml(n){
+  var cb = selectable(n)?'<input type="checkbox" data-id="'+n.id+'" onchange="toggleSel(\''+n.id+'\',this.checked)" '+(sel[n.id]?"checked":"")+">" : '<input type="checkbox" disabled>';
+  var badges = '<span class="badge '+SF[n.s][0]+'"><span class="bd"></span>'+SF[n.s][1]+"</span>";
+  if(n.agg)badges+='<span class="badge b-agg"><span class="bd"></span>汇总</span>';
+  var ks = kidsCleanSum(n);
+  if(n.kids&&ks>0)badges+='<span class="badge b-kids" onclick="toggleKids(\''+n.id+'\')" title="点击展开明细"><span class="bd"></span>内含可清理 '+fmt(ks)+"</span>";
+  var kidsBtn = n.kids&&n.kids.length?'<button class="tbtn kidsbtn" data-id="'+n.id+'" onclick="toggleKids(\''+n.id+'\')"><span class="caret">'+IC.chev+"</span>明细 · "+n.kids.length+"项</button>":"";
+  var h = '<div class="row s-'+n.s+(sel_done[n.id]?" done":"")+'" id="row-'+n.id+'" data-id="'+n.id+'">'
+    +'<div class="grid">'+cb
+    +'<div class="c-main"><div class="l1"><span class="name">'+esc(n.n)+"</span>"+badges+'</div>'
+    +'<div class="l2">'+metaChips(n)+"</div>"
+    +'<div class="note">'+esc(n.note)+"</div></div>"
+    +'<div class="c-size"><div class="size num">'+fmt(n.b)+(n.b>0?"<small>"+(n.b/1073741824).toFixed(2)+" GB</small>":"")+"</div></div>"
+    +'<div class="c-act">'+actionBtns(n)+kidsBtn+"</div></div>";
+  if(n.kids){
+    var ksum=0,kn=0;n.kids.forEach(function(k){ksum+=(k.b||0);kn++;});
+    h+='<div class="kids" id="kids-'+n.id+'"><div class="khead">内部构成 · '+kn+" 项 · 合计约 "+fmt(ksum)+"（子项大小含在父项内，勾选子项删除更精细）</div>"
+      +n.kids.map(function(k){return kidHtml(k);}).join("")+"</div>";
+  }
+  return h+"</div>";
+}
+function kidHtml(k){
+  var cb = selectable(k)?'<input type="checkbox" data-id="'+k.id+'" onchange="toggleSel(\''+k.id+'\',this.checked)" '+(sel[k.id]?"checked":"")+">" : '<input type="checkbox" disabled>';
+  var kb = k.kids&&k.kids.length?'<button class="tbtn kidsbtn" data-id="'+k.id+'" onclick="toggleKids(\''+k.id+'\')"><span class="caret">'+IC.chev+"</span>明细 · "+k.kids.length+"项</button>":"";
+  var h = '<div class="kid s-'+k.s+(sel_done[k.id]?" done":"")+'" id="row-'+k.id+'">'+cb
+    +'<div class="c-main"><div class="l1"><span class="name">'+esc(k.n)+'</span><span class="badge '+SF[k.s][0]+'"><span class="bd"></span>'+SF[k.s][1]+'</span></div>'
+    +'<div class="l2">'+metaChips(k)+"</div>"
+    +'<div class="note">'+esc(k.note)+"</div></div>"
+    +'<div class="c-size"><div class="size num">'+fmt(k.b)+"</div></div>"
+    +'<div class="c-act">'+actionBtns(k,true)+kb+"</div>";
+  if(k.kids&&k.kids.length){
+    var ksum=0;k.kids.forEach(function(g){ksum+=(g.b||0);});
+    h+='<div class="kids" id="kids-'+k.id+'"><div class="khead">进一步细分 · '+k.kids.length+" 项 · 合计约 "+fmt(ksum)+"</div>"
+      +k.kids.map(function(g){return kidHtml(g);}).join("")+"</div>";
+  }
+  return h+"</div>";
+}
+function render(){
+  var html="",gi=0;
+  Object.keys(CATS).forEach(function(ck){
+    var rows = ITEMS.filter(function(n){return n.c===ck;}).sort(function(a,b){return (b.b||0)-(a.b||0);});
+    if(!rows.length)return;
+    gi++;
+    var sSafe=0,sCau=0,sRep=0;
+    rows.forEach(function(n){if(n.s==="safe")sSafe+=n.b||0;else if(n.s==="caution")sCau+=n.b||0;else sRep+=n.b||0;});
+    var tot=sSafe+sCau+sRep||1;
+    var nn=(gi<10?"0":"")+gi;
+    html+='<div class="group" data-cat="'+ck+'"><div class="gcard">'
+      +'<div class="ghead"><div class="gicon '+CATS[ck].gi+'">'+IC[CATS[ck].icon]+"</div>"
+      +'<div class="gt"><div class="gnum">SECTION '+nn+"</div><h2>"+CATS[ck].t+"</h2><div class=\"gsub\">"+CATS[ck].sub+"</div></div>"
+      +'<span class="gsum" data-cat="'+ck+'"></span></div>'
+      +'<div class="gbar"><i class="p-safe" style="width:'+(sSafe/tot*100).toFixed(1)+'%"></i><i class="p-caution" style="width:'+(sCau/tot*100).toFixed(1)+'%"></i><i class="p-report" style="width:'+(sRep/tot*100).toFixed(1)+'%"></i></div>'
+      +'<div class="gbody">';
+    rows.forEach(function(n){html+=rowHtml(n);});
+    html+="</div></div></div>";
+  });
+  document.getElementById("main").innerHTML=html;
+  applyFilter();
+}
+function applyFilter(){
+  document.querySelectorAll(".group").forEach(function(g){
+    var cat=g.getAttribute("data-cat"),any=false,sum=0;
+    g.querySelectorAll(".row").forEach(function(el){
+      var n=BYID[el.getAttribute("data-id")];
+      var ok=cat!=="report"?(curF==="all"||n.s===curF):(curF==="all"||curF==="report");
+      if(ok&&curQ){var q=curQ.toLowerCase();ok=(n.n+" "+n.p+" "+n.note).toLowerCase().indexOf(q)>=0;}
+      el.classList.toggle("off2",!ok);
+      if(ok){any=true;if(!n.agg&&n.s!=="report")sum+=n.b||0;}
+    });
+    g.style.display=any?"":"none";
+    var s=g.querySelector(".gsum");if(s)s.textContent=sum>0?"可清理合计 "+fmt(sum):"";
+  });
+}
+document.querySelectorAll(".tab").forEach(function(t){
+  t.onclick=function(){
+    document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("on");});
+    t.classList.add("on");curF=t.getAttribute("data-f");applyFilter();
+  };
+});
+document.getElementById("q").oninput=function(){curQ=this.value.trim();applyFilter();};
+function toggleKids(id){
+  var k=document.getElementById("kids-"+id);
+  if(!k)return;
+  var open=!k.classList.contains("openk");
+  k.classList.toggle("openk",open);
+  var b=document.querySelector('.kidsbtn[data-id="'+id+'"]');
+  if(b)b.classList.toggle("openk",open);
+}
+
+/* ══════════ 统计 ══════════ */
+function countUp(el,val,suffix){
+  if(!val){el.textContent="0"+(suffix||"");return;}
+  var t0=performance.now(),dur=700,from=0;
+  function step(t){
+    var p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,3);
+    el.textContent=fmt(from+(val-from)*e)+(suffix||"");
+    if(p<1)requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function refreshStats(){
+  var sb=0,sn=0,cb=0,cn=0,hb=0,hn=0,unk="";
+  ITEMS.forEach(function(n){
+    if(n.agg)return;
+    if(n.s==="safe"&&n.c!=="report"){sn++;if(n.b>0)sb+=n.b;else unk="（废纸篓大小未知未计入）";}
+    if(n.s==="caution"&&n.c!=="report"){cn++;if(n.b>0)cb+=n.b;}
+  });
+  ITEMS.forEach(function(n){
+    if(n.c!=="report")return;
+    (n.kids||[]).forEach(function(k){if(k.act&&k.s==="safe"&&k.b>0){hb+=k.b;hn++;}});
+  });
+  countUp(document.getElementById("safeSum"),sb);
+  document.getElementById("safeCnt").textContent=sn+" 项"+unk;
+  countUp(document.getElementById("cauSum"),cb);
+  document.getElementById("cauCnt").textContent=cn+" 项（安装包 / 虚拟环境 / AI 工具运行时）";
+  countUp(document.getElementById("hiddenSum"),hb," ≈");
+  var hidP={};
+  ITEMS.forEach(function(n){if(n.c!=="report")return;(n.kids||[]).forEach(function(k){if(k.act&&k.s==="safe"&&k.b>0)hidP[n.n]=(hidP[n.n]||0)+k.b;});});
+  var top3=Object.keys(hidP).sort(function(a,b){return hidP[b]-hidP[a];}).slice(0,3);
+  document.getElementById("hiddenCnt").textContent=hn+" 个安全子项藏在"+(top3.length?top3.join("、")+"等":"各")+"大目录里；聊天媒体等谨慎项另见明细";
+  document.querySelectorAll(".tab").forEach(function(t){
+    var f=t.getAttribute("data-f");if(f==="all")return;
+    var n=0;ITEMS.forEach(function(x){if(!x.agg&&x.s===f)n++;});
+    var c=t.querySelector(".tc");if(c)c.textContent=n;
+  });
+}
+function renderDonut(){
+  var parts;
+  if(DATA.meta&&DATA.meta.donut&&DATA.meta.donut.length){
+    parts=DATA.meta.donut;
+  }else{
+    parts=ITEMS.filter(function(n){return n.c==="report"&&!n.agg&&n.b>0;})
+      .sort(function(a,b){return b.b-a.b;}).slice(0,6)
+      .map(function(n){return {n:n.n.replace(/（.*/,""),b:n.b};});
+  }
+  var usedGB=null;
+  if(DATA.meta&&DATA.meta.disk&&DATA.meta.disk.used){
+    var m=parseFloat(DATA.meta.disk.used);if(!isNaN(m))usedGB=m;
+  }
+  var used=0;parts.forEach(function(p){used+=p.b;});
+  var total=usedGB!=null?usedGB*1073741824:used;  /* 无磁盘信息时退化为构成占比 */
+  var relative=usedGB==null;
+  var R=62,C=2*Math.PI*R,gap=4,svg="",acc=0;
+  parts.forEach(function(p,i){
+    var frac=p.b/total,len=Math.max(0,frac*C-gap);
+    svg+='<circle data-i="'+i+'" cx="74" cy="74" r="'+R+'" fill="none" stroke="'+DONUT_COLORS[i]+'" stroke-width="15" stroke-linecap="round" stroke-dasharray="'+len.toFixed(1)+' '+C.toFixed(1)+'" stroke-dashoffset="'+(-acc*C).toFixed(1)+'" style="transition:stroke-width .15s;cursor:pointer"/>';
+    acc+=frac;
+  });
+  document.getElementById("donutSvg").innerHTML=svg;
+  document.getElementById("donutC1").textContent=relative?"TOP":usedGB+" GB";
+  document.getElementById("donutC2").textContent=relative?"空间构成占比":"已用 / "+((DATA.meta&&DATA.meta.disk&&DATA.meta.disk.total)||"");
+  var lg="";
+  parts.forEach(function(p,i){lg+='<div class="li" data-i="'+i+'"><span class="sw" style="background:'+DONUT_COLORS[i]+'"></span>'+esc(p.n)+"<b class='num'>"+fmt(p.b)+"</b></div>";});
+  if(!relative)lg+='<div class="li"><span class="sw" style="background:#475569"></span>系统与其它<b class="num">'+((total-used)/1073741824).toFixed(0)+" GB</b></div>";
+  document.getElementById("legend").innerHTML=lg;
+  function hi(i,on){
+    document.querySelectorAll('#donutSvg circle[data-i="'+i+'"]').forEach(function(c){c.setAttribute("stroke-width",on?"18":"15");});
+    document.querySelectorAll('.legend .li[data-i="'+i+'"]').forEach(function(l){l.classList.toggle("hi",on);});
+  }
+  parts.forEach(function(p,i){
+    document.querySelectorAll('#donutSvg circle[data-i="'+i+'"],.legend .li[data-i="'+i+'"]').forEach(function(el){
+      el.addEventListener("mouseenter",function(){hi(i,true);});
+      el.addEventListener("mouseleave",function(){hi(i,false);});
+    });
+  });
+}
+function renderNotes(){
+  var ul=document.getElementById("scanNotes");
+  if(ul&&DATA.meta&&DATA.meta.notes)ul.innerHTML=DATA.meta.notes.map(esc).map(function(x){return "<li>"+x+"</li>";}).join("");
+  if(DATA.meta&&DATA.meta.os)document.getElementById("footLine").textContent="报告生成：ZCode 磁盘清理 · "+DATA.meta.scanDate+" · "+DATA.meta.os;
+}
+
+/* ══════════ 选择 ══════════ */
+function toggleSel(id,on){ if(on)sel[id]=1;else delete sel[id]; refreshDock(); }
+function clearSel(){sel={};document.querySelectorAll("input[type=checkbox][data-id]").forEach(function(c){c.checked=false;});refreshDock();}
+function selectAllSafe(){
+  ITEMS.forEach(function(n){if(n.s==="safe"&&selectable(n))sel[n.id]=1;});
+  document.querySelectorAll("input[type=checkbox][data-id]").forEach(function(c){c.checked=!!sel[c.getAttribute("data-id")];});
+  refreshDock();
+  toast("已勾选 "+Object.keys(sel).length+" 个安全项。多数进废纸篓可反悔；brew / 临时文件清理等少数命令型条目会直接执行（弹窗里会单独标出）；「清空废纸篓」不会被自动勾选");
+}
+function selBytes(){var s=0;for(var i in sel){var n=BYID[i];if(n&&!n.agg)s+=n.b||0;}return s;}
+function refreshDock(){
+  var n=Object.keys(sel).length,d=document.getElementById("dock");
+  d.classList.toggle("show",n>0);
+  var hasCmd=false;
+  for(var i in sel){var x=BYID[i];if(x&&x.act&&x.act.t==="cmd")hasCmd=true;}
+  var tail=SERVER?(hasCmd?"（部分为命令型·直接执行）":"（进废纸篓）"):"";
+  document.getElementById("dockInfo").innerHTML="已选 <b>"+n+"</b> 项 · 预计回收 <b>"+fmt(selBytes())+"</b>"+tail;
+}
+
+/* ══════════ 删除流程 ══════════ */
+function findNode(el){return BYID[el.getAttribute("data-id")];}
+function pathLink(el){
+  if(SERVER){
+    var n=BYID[el.getAttribute("data-id")];
+    if(n){api("/api/open",{p:n.p}).then(function(r){if(!r.ok)toast("打开失败："+(r.reason||""),"err");});}
+    return false;
+  }
+  return true;
+}
+function openIt(el){
+  var n=findNode(el);
+  if(SERVER){api("/api/open",{p:n.p}).then(function(r){toast(r.ok?"已在访达中打开":"打开失败："+(r.reason||""),r.ok?"ok":"err");});}
+  else{var w=window.open(fileUrl(n.p),"_blank");if(!w)location.href=fileUrl(n.p);}
+}
+function copyPath(el){
+  var n=findNode(el);
+  var t=(n.dp&&n.dp.length>1)?n.dp.join("\n"):n.p;
+  copyText(t);toast("已复制路径"+((n.dp&&n.dp.length>1)?"（"+n.dp.length+" 个）":""),"ok");
+}
+function markDone(id){
+  sel_done[id]=1;
+  var el=document.getElementById("row-"+id);
+  if(el){el.classList.add("done");
+    var sz=el.querySelector(".size");if(sz)sz.innerHTML="已清理 ✓";
+    el.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;c.disabled=true;});
+    el.querySelectorAll("button.del").forEach(function(b){b.disabled=true;});
+    delete sel[id];
+  }
+  var n=BYID[id];
+  if(n&&n.kids)n.kids.forEach(function(k){markDone(k.id);});
+}
+function parentPathOf(id){
+  var pp=null;
+  (function walk(list){list.forEach(function(t){(t.kids||[]).forEach(function(k){if(k.id===id)pp=t.p;});if(t.kids)walk(t.kids);});})(ITEMS);
+  return pp;
+}
+function afterDelete(id,parentP){
+  markDone(id);refreshDock();
+  if(parentP&&SERVER){
+    api("/api/du",{p:parentP}).then(function(r){
+      if(!r.ok)return;
+      var du=r.detail||"",u=du.toUpperCase();
+      var pb=parseFloat(du);
+      var unit=u.indexOf("G")>=0?1073741824:u.indexOf("M")>=0?1048576:u.indexOf("K")>=0?1024:1;
+      if(!isNaN(pb)){
+        var nb=pb*unit;
+        ITEMS.forEach(function(n){if(n.p===parentP){n.b=nb;var el=document.getElementById("row-"+n.id);
+          if(el){var s=el.querySelector(".size");if(s&&!sel_done[n.id])s.innerHTML=fmt(nb);}}});
+      }
+    });
+  }
+}
+function delOne(el){ confirmAndDelete([findNode(el).id]); }
+function batchDelete(){
+  var ids=Object.keys(sel).filter(function(id){return selectable(BYID[id])&&!sel_done[id];});
+  if(!ids.length){toast("没有可删除的勾选项");return;}
+  confirmAndDelete(ids);
+}
+function confirmAndDelete(ids){
+  var nodes=ids.map(function(i){return BYID[i];});
+  var total=0;nodes.forEach(function(n){total+=n.b||0;});
+  var mB=document.getElementById("mBody");
+  var listHtml=nodes.map(function(n){return '<div class="mi'+(n.s==="caution"?" wrow":"")+'" id="mi-'+n.id+'"><span class="st">'+(n.s==="caution"?"⚠":"·")+'</span><span>'+esc(n.n)+'</span><span class="sz num">'+fmt(n.b)+"</span></div>";}).join("");
+  document.getElementById("mIco").className="mico";
+  if(SERVER){
+    var cmdNodes=nodes.filter(function(n){return n.act&&n.act.t==="cmd";});
+    var cmdHtml=cmdNodes.length?'<div class="warn">其中 '+cmdNodes.length+' 项是「命令型」清理（'+cmdNodes.map(function(n){return esc(n.n);}).join("、")+'），会直接执行、不经过废纸篓，无法反悔。</div>':"";
+    var goLabel=nodes.length===cmdNodes.length?"执行清理命令":"移入废纸篓并删除";
+    document.getElementById("mTitle").textContent="确认删除 "+nodes.length+" 项 · 约 "+fmt(total);
+    mB.innerHTML='<div class="okmsg">默认<b>移入废纸篓</b>——删错可随时拖回来，确认后再清空废纸篓。</div>'
+      +'<div class="mlist">'+listHtml+"</div>"+cmdHtml
+      +'<div class="mprog" id="mProg"><i id="mProgI"></i></div>'
+      +'<div class="permrow"><input type="checkbox" id="permChk"><label for="permChk">彻底删除（跳过废纸篓，不可恢复'+(cmdNodes.length?"；对命令型条目无效":"")+'）</label></div>'
+      +'<div class="warn">请先退出正在使用这些目录的应用（微信 / Chrome / VS Code / WPS…），否则可能损坏数据文件。</div>'
+      +'<div class="macts"><button id="mYes">'+goLabel+'</button><button id="mNo" onclick="hideModal()">取消</button></div>';
+    document.getElementById("mYes").onclick=async function(){
+      var perm=document.getElementById("permChk").checked;
+      this.disabled=true;this.textContent="正在删除…";
+      document.getElementById("mProg").style.display="block";
+      var ok=0,fail=0;
+      for(var i=0;i<nodes.length;i++){
+        var n=nodes[i],mi=document.getElementById("mi-"+n.id);
+        try{
+          var r=await api("/api/delete",{id:n.id,perm:perm});
+          if(r.ok){ok++;if(mi){mi.className="mi ok";mi.firstChild.textContent="✓";}
+            afterDelete(n.id,parentPathOf(n.id));
+          }else{fail++;if(mi){mi.className="mi bad";mi.firstChild.textContent="✗";mi.title=r.reason||"";}}
+        }catch(e){fail++;if(mi)mi.className="mi bad";}
+        document.getElementById("mProgI").style.width=((i+1)/nodes.length*100)+"%";
+      }
+      this.style.display="none";
+      var msg=document.createElement("div");
+      msg.className=fail?"warn":"okmsg";
+      msg.textContent=fail?("完成："+ok+" 项成功，"+fail+" 项失败（鼠标移到 ✗ 上看原因，多为应用未退出或目录已被删）"):("全部完成！"+ok+" 项已"+(perm?"彻底删除":"移入废纸篓")+"，共约 "+fmt(total)+"。清空废纸篓后空间才会真正释放。");
+      mB.appendChild(msg);
+      var doneBtn=document.getElementById("mNo");if(doneBtn)doneBtn.textContent="关闭";
+      toast(fail?"部分删除失败":"删除完成",fail?"err":"ok");
+      refreshStats();
+    };
+  }else{
+    var lines=["#!/bin/bash","# Mac 清理脚本 · 生成于 "+DATA.meta.scanDate+" · "+nodes.length+" 项 · 约 "+fmt(total),
+      "# 不想删的项：把对应两行整行删掉再执行","echo 清理前可用空间:; df -h /System/Volumes/Data | tail -1",""];
+    nodes.forEach(function(n){var c=cmdFor(n);if(c&&c.charAt(0)!=="#"){var tag=n.act&&n.act.t==="cmd"?"命令型·不进废纸篓":(n.s==="safe"?"安全":"谨慎");lines.push("# ["+tag+"] "+n.n+"（"+fmt(n.b)+"）",c,"");}});
+    lines.push("echo 完成，清理后可用空间:; df -h /System/Volumes/Data | tail -1");
+    document.getElementById("mIco").className="mico info";
+    document.getElementById("mTitle").textContent="静态模式：生成清理命令";
+    mB.innerHTML='<div class="warn">当前未启动本地服务器，无法直接删除。下面是为这 '+nodes.length+' 项生成的终端命令（已自动复制）：</div>'
+      +'<pre class="cmd">'+esc(lines.join("\n"))+"</pre>"
+      +'<b style="font-size:13px">三步执行：</b><ol class="steps"><li>⌘+空格 输入「终端」回车</li><li>⌘+V 粘贴</li><li>回车执行，df -h 看空间变化</li></ol>'
+      +'<div class="macts"><button id="mYes" class="green" onclick="copyText(this._cmd);toast(\'命令已复制\',\'ok\')">再复制一次</button><button id="mNo" onclick="hideModal()">关闭</button></div>';
+    mB.querySelector("#mYes")._cmd=lines.join("\n");
+    copyText(lines.join("\n"));
+  }
+  showModal();
+}
+function howTo(el){
+  var n=findNode(el),txt;
+  if(n.sp==="wechat")txt="这个文件夹=你的全部聊天记录，绝不能整删。\n\n分层清理（先退出微信）：\n① 点本条「明细」，绿色子项（网页缓存/日志/残留）可直接删，绝不碰聊天记录；\n② 黄色的图片/视频/文件子项按月份/会话分布，勾选旧月份删（删前把重要的另存）；\n③ 微信自带清理：设置 → 通用 → 存储空间。";
+  else if(n.sp==="docker")txt="直接删文件会损坏 Docker。\n\n正确做法：\n1. 启动 Docker Desktop → Troubleshoot → Clean / Purge data；\n2. 或终端执行 docker system prune -a（删除所有未使用的镜像/容器/网络）；\n3. 彻底不用了：退出 Docker 后卸载应用，再删除本目录。";
+  else if(n.sp==="iosbackup")txt="iPhone/iPad 整机备份。\n\n查看与管理：\n1. 手机连线 Mac，打开「访达」；\n2. 边栏选手机 → 「管理备份」；\n3. 可删旧备份（删前确认 iCloud 有备份）。";
+  else txt="这一项没有提供一键删除按钮。\n\n" + (n.note||"") + "\n\n通用做法：① 点左边「打开」按钮看看里面到底是什么；② 确认完全不需要后再手动处理；③ 拿不准就保留——要么它归系统/应用自己管理，要么删了代价大于收益。";
+  document.getElementById("mIco").className="mico info";
+  document.getElementById("mTitle").textContent="正确清理方法："+n.n;
+  document.getElementById("mBody").innerHTML='<div class="howto">'+esc(txt)+"</div>";
+  showModal();
+}
+
+/* ══════════ 弹窗 / 复制 / Toast ══════════ */
+function showModal(){document.getElementById("mask").classList.add("show");}
+function hideModal(){document.getElementById("mask").classList.remove("show");}
+document.getElementById("mask").addEventListener("click",function(e){if(e.target===this)hideModal();});
+function copyText(t){
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).catch(function(){legacyCopy(t);});}
+  else legacyCopy(t);
+}
+function legacyCopy(t){
+  var ta=document.createElement("textarea");ta.value=t;ta.style.cssText="position:fixed;opacity:0";
+  document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}
+  document.body.removeChild(ta);
+}
+var tt=null;
+function toast(msg,cls){
+  var t=document.getElementById("toast");t.textContent=msg;t.className=(cls||"")+" show";
+  clearTimeout(tt);tt=setTimeout(function(){t.classList.remove("show");},3200);
+}
+window.addEventListener("scroll",function(){
+  document.getElementById("fab").classList.toggle("show",window.scrollY>600);
+},{passive:true});
+
+/* ══════════ 启动 ══════════ */
+render();refreshStats();renderDonut();renderNotes();refreshDock();
+detectMode();
+</script>
+</body>
+</html>
