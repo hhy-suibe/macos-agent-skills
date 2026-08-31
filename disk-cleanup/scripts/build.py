@@ -18,11 +18,13 @@ build.py —— 把扫描数据 JSON 注入报告模板，产出可直接使用�
   5) 抽取 <script> 做 node --check 语法验证（有 node 时）
 """
 import json
+import hashlib
 import os
 import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 
 
 def die(msg):
@@ -60,27 +62,42 @@ PROTECTED = [
     (r"Google/Chrome/(Default|Profile\d*)$", "浏览器 Profile"),
     (r"/\.ssh/|/\.gnupg/|/\.aws/", "凭据"),
 ]
-# 明确豁免：系统 TMPDIR（/private/var/folders/<a>/<b>/T）与用户应用日志目录。
-# 必须锚定完整前缀，不能用子串匹配，否则 /Keychains/T/x 这类路径会被豁免打穿保护清单。
-PROTECTED_ALLOWED = [r"^/private/var/folders/[^/]+/[^/]+/T(/|$)", r"^/Users/[^/]+/Library/Logs(/|$)"]
+ALLOWED_COMMANDS = {
+    "brew cleanup --prune=all",
+    "osascript -e 'tell application \"Finder\" to empty trash'",
+}
 
 
 def protected_reason(path):
     if not path or path.startswith("tmutil"):
         return None
-    import re as _re
-    if any(_re.search(a, path) for a in PROTECTED_ALLOWED):
-        return None
+    path = os.path.realpath(os.path.abspath(path))
     for pat, why in PROTECTED:
-        if _re.search(pat, path):
+        if re.search(pat, path):
             return why
     return None
+
+
+def canonical_target(path):
+    if not isinstance(path, str) or not path or "\x00" in path or not os.path.isabs(path):
+        return None
+    return os.path.realpath(os.path.abspath(os.path.normpath(path)))
+
+
+def du_bytes_checked(path):
+    try:
+        r = subprocess.run(["/usr/bin/du", "-skx", path], capture_output=True, text=True, timeout=300)
+        m = re.match(r"(\d+)", r.stdout or "")
+        return int(m.group(1)) * 1024 if r.returncode == 0 and m else None
+    except Exception:
+        return None
 
 
 def main():
     if len(sys.argv) < 4:
         die("用法: build.py <data.json> <template.html> <outdir>")
     data_path, tpl_path, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
+    os.makedirs(outdir, exist_ok=True)
     data = json.load(open(data_path, encoding="utf-8"))
     tpl = open(tpl_path, encoding="utf-8").read()
 
@@ -88,8 +105,11 @@ def main():
     collect(data.get("items") or [], flat)
 
     # 1) id 唯一性 + 字符集（id 会进 HTML 属性与内联 onclick，禁特殊字符）
+    missing_ids = [n.get("n", "<未命名>") for n, _ in flat if not isinstance(n.get("id"), str) or not n.get("id")]
+    if missing_ids:
+        die("条目缺少合法 id: %s" % missing_ids[:5])
     ids = [n["id"] for n, _ in flat]
-    dup = {i for i in ids if ids.count(i) > 1}
+    dup = {i for i, count in Counter(ids).items() if count > 1}
     if dup:
         die("重复 id: %s" % dup)
     bad_ids = [i for i in ids if not re.fullmatch(r"[A-Za-z0-9._-]+", i)]
@@ -97,10 +117,23 @@ def main():
         die("id 含非法字符（只允许字母数字._-）: %s" % bad_ids[:5])
 
     # 2) act 与路径保险栓
-    home = os.path.expanduser("~")
-    shallow = {"/", "/Users", "/private", "/private/tmp", "/opt", home}
+    home = os.path.realpath(os.path.expanduser("~"))
+    logs_root = os.path.realpath(os.path.join(home, "Library", "Logs"))
+    shallow = {"/", "/Users", "/private", "/private/tmp", "/opt", home, logs_root}
     for n, _ in flat:
         act = n.get("act")
+        safety = n.get("s")
+        if safety == "caution" and not act:
+            die("caution 条目缺少 act，拒绝构建: %s (id=%s)" % (n.get("n"), n["id"]))
+        if safety == "report" and act:
+            die("report 条目不得包含 act，拒绝构建: %s (id=%s)" % (n.get("n"), n["id"]))
+        if n.get("agg") and act:
+            die("汇总条目不得包含 act，拒绝构建: %s (id=%s)" % (n.get("n"), n["id"]))
+        text = " ".join(str(n.get(k, "")) for k in ("n", "note"))
+        if re.search(r"请\s*agent|建议\s*agent|自动下钻项|请.*复核", text, re.I):
+            die("条目仍含未完成占位文案，拒绝构建: %s (id=%s)" % (n.get("n"), n["id"]))
+        if re.search(r"（[^（）]*(?:GB|MB|KB|GiB|MiB)[^（）]*）$", str(n.get("n", "")), re.I):
+            die("条目名称嵌入了易过期的大小，拒绝构建: %s (id=%s)" % (n.get("n"), n["id"]))
         if not act:
             continue
         if act.get("t") not in ("trash", "cmd"):
@@ -108,11 +141,14 @@ def main():
         if act["t"] == "trash":
             ps = act.get("paths") or n.get("dp") or [n.get("p")]
             for p in ps:
-                if not p or p in shallow or len(str(p).strip("/").split("/")) < 3:
+                cp = canonical_target(p)
+                if not cp or cp in shallow or len(cp.strip("/").split("/")) < 3:
                     die("trash 动作路径过浅，拒绝构建: %s (id=%s)" % (p, n["id"]))
-                why = protected_reason(p)
+                why = protected_reason(cp)
                 if why:
-                    die("trash 动作指向受保护的%s，拒绝构建: %s (id=%s)\n  该类内容只允许 report 级展示，不给删除按钮" % (why, p, n["id"]))
+                    die("trash 动作指向受保护的%s，拒绝构建: %s (id=%s)\n  该类内容只允许 report 级展示，不给删除按钮" % (why, cp, n["id"]))
+        elif act.get("c") not in ALLOWED_COMMANDS:
+            die("命令型动作不在固定白名单，拒绝构建: %s (id=%s)" % (act.get("c"), n["id"]))
 
     # 3) 存在性校验：剔除已消失条目（含 trash 动作的多目标 paths/dp）
     stale = []
@@ -156,10 +192,28 @@ def main():
         notes.insert(0, "本次构建校验时以下 %d 个条目已不存在，自动从报告剔除：%s" % (
             len(stale), "；".join(stale[:8]) + ("…" if len(stale) > 8 else "")))
 
+    # 汇总项必须在本次构建前复测；测量失败时保留原扫描值，绝不覆盖成 0。
+    agg_fail = []
+    refreshed = []
+    collect(data.get("items") or [], refreshed)
+    for n, _ in refreshed:
+        if not n.get("agg") or n.get("measure") is False or not n.get("p") or not os.path.exists(n["p"]):
+            continue
+        measured = du_bytes_checked(n["p"])
+        if measured is None:
+            agg_fail.append(n.get("n") or n["id"])
+        else:
+            n["b"] = measured
+    if agg_fail:
+        data.setdefault("meta", {}).setdefault("notes", []).append(
+            "以下汇总项复测受权限限制，保留扫描值：" + "、".join(agg_fail[:8]) + ("…" if len(agg_fail) > 8 else ""))
+
     # 4) 注入
     scan_date = data.get("meta", {}).get("scanDate", "未知日期")
     meta_line = "%s · %s" % (data.get("meta", {}).get("os", "macOS"),
                              data.get("meta", {}).get("disk", {}).get("used", "") + " 已用 / " + data.get("meta", {}).get("disk", {}).get("total", ""))
+    id_source = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    data.setdefault("meta", {})["reportId"] = hashlib.sha256(id_source.encode("utf-8")).hexdigest()[:20]
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")  # 防 </script> 提前终止
     for token in ("__SCAN_DATA__", "__SCAN_DATE__", "__SCAN_META__", "__REPORT_TOKEN__"):
         if token not in tpl:
@@ -188,7 +242,6 @@ def main():
             os.remove(js_path)
 
     # 写产物
-    os.makedirs(outdir, exist_ok=True)
     out_html = os.path.join(outdir, "电脑垃圾文件清理报告.html")
     open(out_html, "w", encoding="utf-8").write(html)
 

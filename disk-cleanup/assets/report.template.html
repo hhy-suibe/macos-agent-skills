@@ -249,17 +249,19 @@ h1{margin:0;font-size:22px;letter-spacing:.5px;font-weight:500;font-family:var(-
 .mhead .x:hover{background:var(--line);color:var(--ink)}
 .mbody{padding:14px 24px 22px}
 .mlist{max-height:236px;overflow:auto;border:1px solid var(--line);border-radius:13px;margin:6px 0 10px;background:var(--bg)}
-.mi{display:flex;gap:9px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12.5px}
+.mi{display:flex;gap:9px;align-items:flex-start;padding:9px 14px;border-bottom:1px solid var(--line);font-size:12.5px}
 .mi:last-child{border-bottom:none}
 .mi .st{width:18px;text-align:center;color:var(--faint);flex:none}
 .mi.wrow .st{color:var(--amber);font-weight:700}
+.mi .mi-main{flex:1;min-width:0}
+.mi .mi-name{display:block}
+.mi .mi-reason{display:none;margin-top:3px;font-size:12px;line-height:1.5;color:var(--red);white-space:normal;overflow-wrap:anywhere}
 .mi .sz{margin-left:auto;color:var(--sub);white-space:nowrap}
 .mi.ok .st{color:var(--green)}.mi.bad{color:var(--red)}
+.mi.partial .st{color:var(--amber)}
+.mi.bad .mi-reason,.mi.partial .mi-reason{display:block}
 .mprog{height:6px;border-radius:99px;background:var(--graybg);overflow:hidden;margin:4px 0 12px;display:none}
 .mprog i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s;border-radius:99px}
-.permrow{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--sub);margin:10px 0;
-  background:var(--graybg);border-radius:12px;padding:10px 14px}
-.permrow input{accent-color:var(--red);width:15px;height:15px}
 .warn{background:var(--amberbg);border:1px solid var(--amberline);color:var(--amber);border-radius:13px;
   padding:11px 16px;font-size:12.5px;margin:10px 0;line-height:1.7}
 .okmsg{background:var(--greenbg);border:1px solid var(--greenline);color:var(--green);border-radius:13px;
@@ -340,7 +342,7 @@ footer code{background:var(--graybg);border-radius:7px;padding:1px 8px;font-size
         <div class="d" id="cauCnt">–</div>
       </div>
       <div class="stat">
-        <div class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>空间大头里藏着的安全项</div>
+        <div class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>空间大头里藏着的可清理项</div>
         <div class="v b num" id="hiddenSum">0</div>
         <div class="d" id="hiddenCnt">–</div>
       </div>
@@ -378,7 +380,7 @@ footer code{background:var(--graybg);border-radius:7px;padding:1px 8px;font-size
 <footer class="wrap">
   <h3>常见问题</h3>
   <details><summary>点了「删除」会发生什么？能反悔吗？</summary>
-    <p>增强模式下：文件先<b>移入废纸篓</b>（和手动拖进废纸篓一样，随时能拖回来），确认没问题后再清空废纸篓真正释放空间。勾选「彻底删除」则跳过废纸篓直接删除。少数「命令型」条目（清空废纸篓、brew 清理、清理旧临时文件）会直接执行、不经过废纸篓——弹窗里会单独列出。所有删除动作都记录在同目录的 <code>清理记录.log</code> 里。删除前请退出对应 App（微信、Chrome、VS Code…），避免数据库损坏。</p></details>
+    <p>增强模式下：文件只会<b>移入废纸篓</b>（和手动拖进废纸篓一样，随时能拖回来），网页端不提供彻底删除。少数固定白名单的「命令型」条目（清空废纸篓、brew 清理）会直接执行、不经过废纸篓——弹窗里会单独列出。所有删除动作都记录在同目录的 <code>清理记录.log</code> 里。删除前请退出对应 App（微信、Chrome、VS Code…），避免应用边写边清。</p></details>
   <details><summary>为什么需要「启动清理报告.command」？</summary>
     <p>浏览器有安全沙箱：纯网页<b>永远不可能</b>直接删你电脑上的文件（否则随便一个恶意网页就能清空你的硬盘）。所以报告配了一个只监听本机(127.0.0.1)的小服务器：它只认报告里列出的白名单动作，网页发「删某一项」的编号，它来执行。不用时关掉终端窗口即可。没启动它时报告照常能看，删除按钮退化为生成终端命令。</p></details>
   <details><summary>微信数据到底怎么清？</summary>
@@ -431,21 +433,25 @@ function esc(x){var d=document.createElement("div");d.textContent=x==null?"":Str
 function fmt(b){if(!b||b<=0)return "未知";var u=["B","KB","MB","GB","TB"],i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return (i===0?b:b.toFixed(b>=100?1:2))+" "+u[i];}
 function fmtCnt(c){return (c==null||c<0)?"":c.toLocaleString("zh-Hans-CN")}
 function fileUrl(p){return "file://"+encodeURI(p).replace(/#/g,"%23").replace(/\?/g,"%3F");}
-function shq(p){return "'"+String(p).replace(/'/g,"'\\''")+"'";}
 function collectIds(list){var r=[];list.forEach(function(n){r.push(n);if(n.kids)collectIds(n.kids).forEach(function(k){r.push(k);});});return r;}
 var ALL = collectIds(ITEMS);
 ALL.forEach(function(n){BYID[n.id]=n;});
-function kidsCleanSum(n){var s=0;(n.kids||[]).forEach(function(k){if(k.act&&(k.s==="safe"||k.s==="caution")&&k.b>0)s+=k.b;});return s;}
-function selectable(n){return !!(n.act && !n.agg && n.s!=="report");}
-function pathsOf(n){return (n.act&&n.act.paths)||n.dp||[n.p];}
-function cmdFor(n){
-  if(!n.act)return "";
-  if(n.act.t==="cmd")return n.act.c;
-  var ps=n.act.t==="trash"?pathsOf(n):[];
-  var bad=!ps||!ps.length||ps.some(function(p){return !p||p==="/"||p==="/Users"||p=="/private"||p==="/private/tmp"||p.split("/").length<4;});
-  if(bad)return "# [跳过] 此项仅用于报告，未生成删除命令";
-  return "rm -rf "+ps.map(shq).join(" ");
+var DONE_KEY="disk-cleanup.done.v2."+((DATA.meta&&DATA.meta.reportId)||DATA.meta.scanDate||"report");
+function loadDone(){try{var ids=JSON.parse(localStorage.getItem(DONE_KEY)||"[]");ids.forEach(function(id){if(BYID[id])sel_done[id]=1;});}catch(e){}}
+function saveDone(){try{localStorage.setItem(DONE_KEY,JSON.stringify(Object.keys(sel_done)));}catch(e){}}
+loadDone();
+function actionable(n){return !!(n&&n.act&&!n.agg&&(n.s==="safe"||n.s==="caution")&&!sel_done[n.id]);}
+function cleanableDescendants(root,severity){
+  var out=[];
+  (function walk(list){(list||[]).forEach(function(n){
+    if(actionable(n)&&(!severity||n.s===severity)){out.push(n);return;}
+    walk(n.kids);
+  });})(root&&root.kids);
+  return out;
 }
+function kidsCleanSum(n){return cleanableDescendants(n).reduce(function(s,k){return s+(k.b||0);},0);}
+function selectable(n){return actionable(n);}
+function pathsOf(n){return (n.act&&n.act.paths)||n.dp||[n.p];}
 
 /* ══════════ 服务器 API ══════════ */
 function api(route,body){
@@ -456,7 +462,12 @@ async function detectMode(){
   var pill=document.getElementById("pill"),pt=document.getElementById("pillText");
   var bar=document.getElementById("modebar"),bin=document.getElementById("modebarIn");
   if(location.protocol==="http:"||location.protocol==="https:"){
-    try{var r=await fetch("/api/ping").then(function(x){return x.json();});if(r&&r.ok)SERVER=true;}catch(e){}
+    try{
+      var r=await fetch("/api/ping",{cache:"no-store"}).then(function(x){return x.json();});
+      if(r&&r.ok&&(!r.reportId||!DATA.meta.reportId||r.reportId===DATA.meta.reportId)){
+        SERVER=true;(r.gone||[]).forEach(function(id){if(BYID[id])markDone(id);});refreshStats();
+      }
+    }catch(e){}
   }
   if(SERVER){
     pill.classList.add("on");pt.textContent="增强模式 · 点击即删";
@@ -465,7 +476,7 @@ async function detectMode(){
   }else{
     pt.textContent="静态模式";
     bar.style.display="block";bar.className="modebar off";
-    bin.innerHTML="当前是静态模式（只能看，删除按钮退化为复制终端命令）。要解锁<b>点击直接删除</b>：双击同文件夹里的 <code>启动清理报告.command</code>，会自动打开增强版页面。";
+    bin.innerHTML="当前是静态模式（只读查看，不生成删除命令）。要使用带安全校验的<b>点击清理</b>：双击同文件夹里的 <code>启动清理报告.command</code>，会自动打开增强版页面。";
   }
 }
 
@@ -512,6 +523,7 @@ function actionBtns(n,kid){
   var h = "";
   if(n.link!==false)h+='<button class="abtn" data-id="'+n.id+'" onclick="openIt(this)" title="在访达中打开">'+IC.open+"</button>";
   h+='<button class="abtn" data-id="'+n.id+'" onclick="copyPath(this)" title="复制路径">'+IC.copy+"</button>";
+  if(sel_done[n.id])return h;
   if(selectable(n))h+='<button class="tbtn del" data-id="'+n.id+'" onclick="delOne(this)">'+IC.trash+"删除…</button>";
   else if(n.sp==="wechat"||n.sp==="docker"||n.sp==="iosbackup")h+='<button class="tbtn how" data-id="'+n.id+'" onclick="howTo(this)" title="查看安全的清理步骤">'+IC.broom+"正确清理</button>";
   else if(!n.kids||!n.kids.length)h+='<button class="tbtn how" data-id="'+n.id+'" onclick="howTo(this)" title="为什么没有删除按钮">'+IC.broom+"如何处理</button>";
@@ -529,7 +541,7 @@ function rowHtml(n){
     +'<div class="c-main"><div class="l1"><span class="name">'+esc(n.n)+"</span>"+badges+'</div>'
     +'<div class="l2">'+metaChips(n)+"</div>"
     +'<div class="note">'+esc(n.note)+"</div></div>"
-    +'<div class="c-size"><div class="size num">'+fmt(n.b)+(n.b>0?"<small>"+(n.b/1073741824).toFixed(2)+" GB</small>":"")+"</div></div>"
+    +'<div class="c-size"><div class="size num">'+(sel_done[n.id]?"已清理 ✓":fmt(n.b)+(n.b>0?"<small>"+(n.b/1073741824).toFixed(2)+" GB</small>":""))+"</div></div>"
     +'<div class="c-act">'+actionBtns(n)+kidsBtn+"</div></div>";
   if(n.kids){
     var ksum=0,kn=0;n.kids.forEach(function(k){ksum+=(k.b||0);kn++;});
@@ -545,7 +557,7 @@ function kidHtml(k){
     +'<div class="c-main"><div class="l1"><span class="name">'+esc(k.n)+'</span><span class="badge '+SF[k.s][0]+'"><span class="bd"></span>'+SF[k.s][1]+'</span></div>'
     +'<div class="l2">'+metaChips(k)+"</div>"
     +'<div class="note">'+esc(k.note)+"</div></div>"
-    +'<div class="c-size"><div class="size num">'+fmt(k.b)+"</div></div>"
+    +'<div class="c-size"><div class="size num">'+(sel_done[k.id]?"已清理 ✓":fmt(k.b))+"</div></div>"
     +'<div class="c-act">'+actionBtns(k,true)+kb+"</div>";
   if(k.kids&&k.kids.length){
     var ksum=0;k.kids.forEach(function(g){ksum+=(g.b||0);});
@@ -619,27 +631,28 @@ function countUp(el,val,suffix){
 }
 function refreshStats(){
   var sb=0,sn=0,cb=0,cn=0,hb=0,hn=0,unk="";
-  ITEMS.forEach(function(n){
-    if(n.agg)return;
-    if(n.s==="safe"&&n.c!=="report"){sn++;if(n.b>0)sb+=n.b;else unk="（废纸篓大小未知未计入）";}
-    if(n.s==="caution"&&n.c!=="report"){cn++;if(n.b>0)cb+=n.b;}
-  });
+  (function walkAll(list){(list||[]).forEach(function(n){
+    if(n.agg){walkAll(n.kids);return;}
+    if(n.s==="safe"&&actionable(n)){sn++;if(n.b==null)unk="（大小未知未计入）";else if(n.b>0)sb+=n.b;}
+    if(n.s==="caution"&&actionable(n)){cn++;if(n.b>0)cb+=n.b;}
+    walkAll(n.kids);
+  });})(ITEMS);
   ITEMS.forEach(function(n){
     if(n.c!=="report")return;
-    (n.kids||[]).forEach(function(k){if(k.act&&k.s==="safe"&&k.b>0){hb+=k.b;hn++;}});
+    cleanableDescendants(n).forEach(function(k){if(k.b>0){hb+=k.b;hn++;}});
   });
   countUp(document.getElementById("safeSum"),sb);
   document.getElementById("safeCnt").textContent=sn+" 项"+unk;
   countUp(document.getElementById("cauSum"),cb);
-  document.getElementById("cauCnt").textContent=cn+" 项（安装包 / 虚拟环境 / AI 工具运行时）";
+  document.getElementById("cauCnt").textContent=cn+" 项（聊天文件 / 自动备份 / 运行时等，删除前看清每项说明）";
   countUp(document.getElementById("hiddenSum"),hb," ≈");
   var hidP={};
-  ITEMS.forEach(function(n){if(n.c!=="report")return;(n.kids||[]).forEach(function(k){if(k.act&&k.s==="safe"&&k.b>0)hidP[n.n]=(hidP[n.n]||0)+k.b;});});
+  ITEMS.forEach(function(n){if(n.c!=="report")return;cleanableDescendants(n).forEach(function(k){if(k.b>0)hidP[n.n]=(hidP[n.n]||0)+k.b;});});
   var top3=Object.keys(hidP).sort(function(a,b){return hidP[b]-hidP[a];}).slice(0,3);
-  document.getElementById("hiddenCnt").textContent=hn+" 个安全子项藏在"+(top3.length?top3.join("、")+"等":"各")+"大目录里；聊天媒体等谨慎项另见明细";
+  document.getElementById("hiddenCnt").textContent=hn+" 个可清理子项藏在"+(top3.length?top3.join("、")+"等":"各")+"大目录里；展开大目录可逐项勾选";
   document.querySelectorAll(".tab").forEach(function(t){
     var f=t.getAttribute("data-f");if(f==="all")return;
-    var n=0;ITEMS.forEach(function(x){if(!x.agg&&x.s===f)n++;});
+    var n=0;(function cnt(list){(list||[]).forEach(function(x){if(!x.agg&&x.s===f)n++;cnt(x.kids);});})(ITEMS);
     var c=t.querySelector(".tc");if(c)c.textContent=n;
   });
 }
@@ -693,7 +706,7 @@ function renderNotes(){
 function toggleSel(id,on){ if(on)sel[id]=1;else delete sel[id]; refreshDock(); }
 function clearSel(){sel={};document.querySelectorAll("input[type=checkbox][data-id]").forEach(function(c){c.checked=false;});refreshDock();}
 function selectAllSafe(){
-  ITEMS.forEach(function(n){if(n.s==="safe"&&selectable(n))sel[n.id]=1;});
+  (function walkAll(list){(list||[]).forEach(function(n){if(n.s==="safe"&&selectable(n))sel[n.id]=1;walkAll(n.kids);});})(ITEMS);
   document.querySelectorAll("input[type=checkbox][data-id]").forEach(function(c){c.checked=!!sel[c.getAttribute("data-id")];});
   refreshDock();
   toast("已勾选 "+Object.keys(sel).length+" 个安全项。多数进废纸篓可反悔；brew / 临时文件清理等少数命令型条目会直接执行（弹窗里会单独标出）；「清空废纸篓」不会被自动勾选");
@@ -739,6 +752,7 @@ function markDone(id){
   }
   var n=BYID[id];
   if(n&&n.kids)n.kids.forEach(function(k){markDone(k.id);});
+  saveDone();
 }
 function parentPathOf(id){
   var pp=null;
@@ -768,14 +782,15 @@ function batchDelete(){
   confirmAndDelete(ids);
 }
 function confirmAndDelete(ids){
-  var nodes=ids.map(function(i){return BYID[i];});
+  var nodes=ids.map(function(i){return BYID[i];}).filter(actionable);
+  if(!nodes.length){toast("没有可删除的项目","err");return;}
   var total=0;nodes.forEach(function(n){total+=n.b||0;});
   var mB=document.getElementById("mBody");
-  var listHtml=nodes.map(function(n){return '<div class="mi'+(n.s==="caution"?" wrow":"")+'" id="mi-'+n.id+'"><span class="st">'+(n.s==="caution"?"⚠":"·")+'</span><span>'+esc(n.n)+'</span><span class="sz num">'+fmt(n.b)+"</span></div>";}).join("");
+  var listHtml=nodes.map(function(n){return '<div class="mi'+(n.s==="caution"?" wrow":"")+'" id="mi-'+n.id+'"><span class="st">'+(n.s==="caution"?"!":"·")+'</span><span class="mi-main"><span class="mi-name">'+esc(n.n)+'</span><span class="mi-reason" aria-live="polite"></span></span><span class="sz num">'+fmt(n.b)+"</span></div>";}).join("");
   document.getElementById("mIco").className="mico";
   if(SERVER){
     var cmdNodes=nodes.filter(function(n){return n.act&&n.act.t==="cmd";});
-    var APPMAP=[["xinWeChat","微信"],["xwechat","微信"],["Google/Chrome","Chrome"],["Application Support/Code","VS Code"],[".vscode","VS Code"],["wpsoffice","WPS"],["LarkShell","飞书"],["tencent.meeting","腾讯会议"],["Firefox","Firefox"],["bilibili","哔哩哔哩"],["GoodNotes","GoodNotes"]];
+    var APPMAP=[["xinWeChat","微信"],["xwechat","微信"],["Google/Chrome","Chrome"],["Application Support/Code","VS Code"],[".vscode","VS Code"],["wpsoffice","WPS"],["LarkShell","飞书"],["tencent.meeting","腾讯会议"],["Firefox","Firefox"],["Citro Labs","ego lite"],["CindyGlobal","Cindy"],["bilibili","哔哩哔哩"],["GoodNotes","GoodNotes"]];
     var needApps=[];nodes.forEach(function(n){pathsOf(n).forEach(function(p){APPMAP.forEach(function(kv){if(p.indexOf(kv[0])>=0&&needApps.indexOf(kv[1])<0)needApps.push(kv[1]);});});});
     var appWarn=needApps.length
       ?'<div class="warn">本批包含 '+esc(needApps.join(" / "))+' 的应用数据，建议先退出对应应用再删除，避免应用边写边删；其余缓存/日志项不受影响。</div>'
@@ -786,46 +801,38 @@ function confirmAndDelete(ids){
     mB.innerHTML='<div class="okmsg">默认<b>移入废纸篓</b>——删错可随时拖回来，确认后再清空废纸篓。</div>'
       +'<div class="mlist">'+listHtml+"</div>"+cmdHtml
       +'<div class="mprog" id="mProg"><i id="mProgI"></i></div>'
-      +'<div class="permrow"><input type="checkbox" id="permChk"><label for="permChk">彻底删除（跳过废纸篓，不可恢复'+(cmdNodes.length?"；对命令型条目无效":"")+'）</label></div>'
       +appWarn
       +'<div class="macts"><button id="mYes">'+goLabel+'</button><button id="mNo" onclick="hideModal()">取消</button></div>';
     document.getElementById("mYes").onclick=async function(){
-      var perm=document.getElementById("permChk").checked;
       this.disabled=true;this.textContent="正在删除…";
       document.getElementById("mProg").style.display="block";
-      var ok=0,fail=0;
+      var ok=0,partial=0,fail=0,already=0;
       for(var i=0;i<nodes.length;i++){
         var n=nodes[i],mi=document.getElementById("mi-"+n.id);
         try{
-          var r=await api("/api/delete",{id:n.id,perm:perm});
-          if(r.ok){ok++;if(mi){mi.className="mi ok";mi.firstChild.textContent="✓";}
+          var r=await api("/api/delete",{id:n.id,perm:false});
+          if(r.ok){ok++;if(r.already)already++;if(mi){mi.className="mi ok";mi.firstChild.textContent="✓";}
             afterDelete(n.id,parentPathOf(n.id));
-          }else{fail++;if(mi){mi.className="mi bad";mi.firstChild.textContent="✗";mi.title=r.reason||"";}}
-        }catch(e){fail++;if(mi)mi.className="mi bad";}
+          }else if(r.partial){partial++;if(mi){mi.className="mi partial";mi.firstChild.textContent="!";var pr=mi.querySelector(".mi-reason");if(pr)pr.textContent=r.reason||"部分目标未能处理";}}
+          else{fail++;if(mi){mi.className="mi bad";mi.firstChild.textContent="×";var er=mi.querySelector(".mi-reason");if(er)er.textContent=r.reason||r.detail||"删除失败";}}
+        }catch(e){fail++;if(mi){mi.className="mi bad";var er2=mi.querySelector(".mi-reason");if(er2)er2.textContent=e&&e.message?e.message:"请求失败";}}
         document.getElementById("mProgI").style.width=((i+1)/nodes.length*100)+"%";
       }
       this.style.display="none";
       var msg=document.createElement("div");
-      msg.className=fail?"warn":"okmsg";
-      msg.textContent=fail?("完成："+ok+" 项成功，"+fail+" 项失败（鼠标移到 ✗ 上看原因，多为应用未退出或目录已被删）"):("全部完成！"+ok+" 项已"+(perm?"彻底删除":"移入废纸篓")+"，共约 "+fmt(total)+"。清空废纸篓后空间才会真正释放。");
+      msg.className=(fail||partial)?"warn":"okmsg";
+      msg.textContent=(fail||partial)?("完成："+ok+" 项成功，"+partial+" 项部分完成，"+fail+" 项失败；具体原因已显示在对应项目下方。"):("全部完成！"+ok+" 项已处理"+(already?"（其中 "+already+" 项此前已清理）":"")+"。移入废纸篓的内容在清空废纸篓后才会真正释放空间。");
       mB.appendChild(msg);
       var doneBtn=document.getElementById("mNo");if(doneBtn)doneBtn.textContent="关闭";
-      toast(fail?"部分删除失败":"删除完成",fail?"err":"ok");
+      toast((fail||partial)?"部分项目未完成":"删除完成",(fail||partial)?"err":"ok");
       refreshStats();
     };
   }else{
-    var lines=["#!/bin/bash","# Mac 清理脚本 · 生成于 "+DATA.meta.scanDate+" · "+nodes.length+" 项 · 约 "+fmt(total),
-      "# 不想删的项：把对应两行整行删掉再执行","echo 清理前可用空间:; df -h /System/Volumes/Data | tail -1",""];
-    nodes.forEach(function(n){var c=cmdFor(n);if(c&&c.charAt(0)!=="#"){var tag=n.act&&n.act.t==="cmd"?"命令型·不进废纸篓":(n.s==="safe"?"安全":"谨慎");lines.push("# ["+tag+"] "+n.n+"（"+fmt(n.b)+"）",c,"");}});
-    lines.push("echo 完成，清理后可用空间:; df -h /System/Volumes/Data | tail -1");
     document.getElementById("mIco").className="mico info";
-    document.getElementById("mTitle").textContent="静态模式：生成清理命令";
-    mB.innerHTML='<div class="warn">当前未启动本地服务器，无法直接删除。下面是为这 '+nodes.length+' 项生成的终端命令（已自动复制）：</div>'
-      +'<pre class="cmd">'+esc(lines.join("\n"))+"</pre>"
-      +'<b style="font-size:13px">三步执行：</b><ol class="steps"><li>⌘+空格 输入「终端」回车</li><li>⌘+V 粘贴</li><li>回车执行，df -h 看空间变化</li></ol>'
-      +'<div class="macts"><button id="mYes" class="green" onclick="copyText(this._cmd);toast(\'命令已复制\',\'ok\')">再复制一次</button><button id="mNo" onclick="hideModal()">关闭</button></div>';
-    mB.querySelector("#mYes")._cmd=lines.join("\n");
-    copyText(lines.join("\n"));
+    document.getElementById("mTitle").textContent="静态模式：仅供查看";
+    mB.innerHTML='<div class="warn">当前未启动本地服务器。为避免绕过安全校验，静态页面不再生成 rm -rf 删除脚本。</div>'
+      +'<div class="howto">请关闭此弹窗，然后双击报告同目录的“启动清理报告.command”。增强模式会执行路径白名单、受保护目录和已清理状态检查，删除默认进入废纸篓。</div>'
+      +'<div class="macts"><button id="mNo" onclick="hideModal()">关闭</button></div>';
   }
   showModal();
 }

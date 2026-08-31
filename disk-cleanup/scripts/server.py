@@ -4,7 +4,7 @@
 清理报告本地服务器
 ==================
 让「电脑垃圾文件清理报告.html」获得三个能力：
-  1. 点击「删除」直接执行（默认移入废纸篓，可恢复；可选彻底删除）
+  1. 点击「删除」直接执行（文件只移入废纸篓，可恢复；网页端不提供彻底删除）
   2. 点击「打开」直接在访达中定位
   3. 点击路径/刷新时重新测量目录当前占用
 
@@ -24,20 +24,22 @@
 """
 
 import glob
+import hashlib
 import hmac
 import json
 import os
 import re
 import secrets
-import shutil
 import subprocess
 import sys
 import threading
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
-PORT = 8648
+BASE_PORT = int(os.environ.get("CLEANUP_REPORT_PORT", "8648"))
+PORT_SPAN = 20
 
 # ── 系统数据/元数据保护清单（纵深防御：与 build.py 的 PROTECTED 保持同步）──
 # 即使报告数据被错误配置，执行删除前也会按此清单二次拦截。
@@ -62,21 +64,41 @@ PROTECTED = [
     (r"Google/Chrome/(Default|Profile\d*)$", "浏览器 Profile"),
     (r"/\.ssh/|/\.gnupg/|/\.aws/", "凭据"),
 ]
-PROTECTED_ALLOWED = [r"^/private/var/folders/[^/]+/[^/]+/T(/|$)", r"^/Users/[^/]+/Library/Logs(/|$)"]
+ALLOWED_COMMANDS = {
+    "brew cleanup --prune=all",
+    "osascript -e 'tell application \"Finder\" to empty trash'",
+}
 
 
 def protected_reason(path):
     if not path:
         return None
-    if any(re.search(a, path) for a in PROTECTED_ALLOWED):
-        return None
+    path = os.path.realpath(os.path.abspath(path))
     for pat, why in PROTECTED:
         if re.search(pat, path):
             return why
     return None
+
+
+def validated_target(raw):
+    """返回规范化操作路径；所有安全判断同时基于 realpath，防 .. / symlink 绕过。"""
+    if not isinstance(raw, str) or not raw or "\x00" in raw or not os.path.isabs(raw):
+        return None, "路径必须是非空绝对路径"
+    path = os.path.abspath(os.path.normpath(raw))
+    real = os.path.realpath(path)
+    home = os.path.realpath(os.path.expanduser("~"))
+    shallow = {"/", "/Users", "/private", "/private/tmp", "/opt", home,
+               os.path.join(home, "Library", "Logs")}
+    if real in shallow or len(real.strip("/").split("/")) < 3:
+        return None, "路径过浅或为受保护的根目录"
+    why = protected_reason(real)
+    if why:
+        return None, "该路径属于受保护的%s" % why
+    return path, None
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(HERE, "清理记录.log")
-TRASH = os.path.expanduser("~/.Trash")
+TEST_MODE = os.environ.get("CLEANUP_REPORT_TEST_MODE") == "1"
+TRASH = os.path.abspath(os.environ.get("CLEANUP_REPORT_TRASH", os.path.expanduser("~/.Trash")) if TEST_MODE else os.path.expanduser("~/.Trash"))
 TOKEN = secrets.token_hex(16)
 PLACEHOLDER = "__REPORT_TOKEN__"
 MARKER = "/*DATA-START*/"
@@ -112,12 +134,15 @@ def load_report():
         raise RuntimeError("报告 HTML 中找不到 DATA 数据块")
     data = json.loads(m.group(1))
 
-    actions, paths = {}, set()
+    actions, paths, seen = {}, set(), set()
 
     def walk(node):
         if isinstance(node, dict):
             nid = node.get("id")
             if nid:
+                if nid in seen:
+                    raise RuntimeError("报告含重复 id: " + nid)
+                seen.add(nid)
                 if node.get("p") and isinstance(node["p"], str):
                     paths.add(node["p"])
                 for extra in (node.get("dp") or []):
@@ -125,10 +150,27 @@ def load_report():
                         paths.add(extra)
                 act = node.get("act")
                 if act and act.get("t"):
+                    if node.get("s") not in ("safe", "caution") or node.get("agg"):
+                        raise RuntimeError("不可执行的 report/agg 条目含 act: " + nid)
+                    if act.get("t") not in ("trash", "cmd"):
+                        raise RuntimeError("未知动作类型: " + str(act.get("t")))
+                    targets = act.get("paths") or node.get("dp") or ([node.get("p")] if node.get("p") else [])
+                    if act.get("t") == "trash":
+                        if not targets:
+                            raise RuntimeError("trash 动作没有目标: " + nid)
+                        checked = []
+                        for target in targets:
+                            normalized, why = validated_target(target)
+                            if why:
+                                raise RuntimeError("危险 trash 动作 %s: %s" % (nid, why))
+                            checked.append(normalized)
+                        targets = checked
+                    elif not act.get("c") or act.get("c") not in ALLOWED_COMMANDS:
+                        raise RuntimeError("命令型动作不在固定白名单: " + nid)
                     actions[nid] = {
                         "name": node.get("n") or nid,
                         "kind": act["t"],
-                        "paths": act.get("paths") or node.get("dp") or ([node["p"]] if node.get("p") else []),
+                        "paths": targets,
                         "cmd": act.get("c") or "",
                     }
             for v in node.values():
@@ -140,7 +182,8 @@ def load_report():
     walk(data.get("items"))
     if not actions:
         raise RuntimeError("DATA 中没有找到任何可执行动作")
-    return data, actions, paths
+    report_id = data.get("meta", {}).get("reportId") or hashlib.sha256(m.group(1).encode("utf-8")).hexdigest()[:20]
+    return data, actions, paths, report_id
 
 
 # ---------------------------------------------------------------- 删除实现
@@ -159,29 +202,40 @@ _TRASH_LOCK = threading.Lock()
 
 def trash_move(path: str):
     """把路径移入废纸篓（同卷 rename，瞬间完成、可恢复）。加锁避免并发删除时同名覆盖。"""
-    if not os.path.exists(path):
-        return {"ok": False, "reason": "路径不存在（可能已删除）"}
+    if not os.path.lexists(path):
+        return {"ok": True, "status": "already_absent", "already": True, "detail": "路径已不存在（此前可能已清理）"}
     with _TRASH_LOCK:
         dst = _unique_trash_name(os.path.basename(path.rstrip("/")))
         try:
             if os.stat(path).st_dev != os.stat(TRASH).st_dev:
                 return {"ok": False, "reason": "跨磁盘分区，无法移入废纸篓；请用网页上的「生成脚本」方式删除"}
             os.rename(path, dst)
-            return {"ok": True, "detail": "已移入废纸篓（可恢复）：~/.Trash/" + os.path.basename(dst)}
+            return {"ok": True, "status": "deleted", "detail": "已移入废纸篓（可恢复）：~/.Trash/" + os.path.basename(dst)}
         except OSError as e:
-            return {"ok": False, "reason": str(e)}
+            return {"ok": False, "status": "failed", "reason": str(e)}
 
 
-def permanent_remove(path: str):
-    """彻底删除（不可恢复）。"""
-    try:
-        if os.path.isdir(path) and not os.path.islink(path):
-            shutil.rmtree(path)
-        else:
-            os.remove(path)
-        return {"ok": True, "detail": "已彻底删除"}
-    except OSError as e:
-        return {"ok": False, "reason": str(e)}
+def trash_many(paths):
+    results = []
+    for raw in paths:
+        path, why = validated_target(raw)
+        if why:
+            results.append({"path": raw, "ok": False, "status": "failed", "reason": why})
+            continue
+        result = trash_move(path)
+        results.append(dict(result, path=path))
+    deleted = sum(1 for r in results if r.get("status") == "deleted")
+    skipped = sum(1 for r in results if r.get("status") == "already_absent")
+    failed = sum(1 for r in results if not r.get("ok"))
+    if failed:
+        status = "partial" if deleted or skipped else "failed"
+        reasons = [r.get("reason", "未知错误") for r in results if not r.get("ok")]
+        return {"ok": False, "partial": status == "partial", "status": status,
+                "deleted": deleted, "skipped": skipped, "failed": failed,
+                "reason": "；".join(reasons[:3]), "results": results}
+    return {"ok": True, "status": "already_absent" if skipped and not deleted else "success",
+            "already": skipped > 0 and deleted == 0, "deleted": deleted, "skipped": skipped,
+            "failed": 0, "detail": "目标已处理完成", "results": results}
 
 
 def run_fixed_command(cmd: str):
@@ -189,17 +243,23 @@ def run_fixed_command(cmd: str):
     命令字符串来自服务器本地数据，绝无网页输入。"""
     try:
         r = subprocess.run(["/bin/bash", "-c", cmd], capture_output=True, text=True, timeout=600)
-        out = (r.stdout or r.stderr or "").strip()[:500]
-        return {"ok": r.returncode == 0, "detail": out or ("完成 (exit %d)" % r.returncode)}
+        out = (r.stdout or r.stderr or "").strip()[:1000]
+        if r.returncode == 0:
+            return {"ok": True, "status": "success", "detail": out or "完成"}
+        return {"ok": False, "status": "failed", "reason": out or ("命令退出码 %d" % r.returncode), "detail": out}
     except subprocess.TimeoutExpired:
         return {"ok": False, "reason": "命令超时（>600s）"}
+    except OSError as e:
+        return {"ok": False, "reason": str(e)}
 
 
 def measure(path: str):
     try:
         r = subprocess.run(["/usr/bin/du", "-shx", path], capture_output=True, text=True, timeout=300)
         out = (r.stdout or "").split("\t")[0].strip()
-        return {"ok": bool(out), "detail": out or "未知"}
+        if r.returncode != 0 or not out:
+            return {"ok": False, "reason": (r.stderr or "无法测量").strip()[:500]}
+        return {"ok": True, "detail": out}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "reason": str(e)}
 
@@ -215,7 +275,7 @@ def log_action(record: dict):
 
 # ---------------------------------------------------------------- HTTP
 try:
-    DATA, ACTIONS, WHITELIST_PATHS = load_report()
+    DATA, ACTIONS, WHITELIST_PATHS, REPORT_ID = load_report()
 except Exception as e:  # noqa: BLE001
     print("初始化失败：" + str(e))
     print("请确认报告 HTML 与本脚本在同一文件夹、且未被改动损坏。")
@@ -239,7 +299,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _host_ok(self):
         host = self.headers.get("Host", "")
-        return host in ("127.0.0.1:%d" % PORT, "localhost:%d" % PORT, "[::1]:%d" % PORT)
+        port = self.server.server_port
+        return host in ("127.0.0.1:%d" % port, "localhost:%d" % port, "[::1]:%d" % port)
 
     def _token_ok(self):
         return hmac.compare_digest(self.headers.get("X-Report-Token", ""), TOKEN)
@@ -247,7 +308,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         if not self._host_ok():
             return self._forbidden("bad host")
-        if self.path in ("/", "/index.html"):
+        route = urlsplit(self.path).path
+        if route in ("/", "/index.html"):
             with open(HTML_PATH, encoding="utf-8") as f:
                 html = f.read()
             if PLACEHOLDER in html:
@@ -260,8 +322,13 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if self.path == "/api/ping":
-            return self._json({"ok": True, "mode": "server", "actions": len(ACTIONS)})
+        if route == "/api/ping":
+            gone = []
+            for aid, action in ACTIONS.items():
+                if action["kind"] == "trash" and action["paths"] and all(not os.path.lexists(p) for p in action["paths"]):
+                    gone.append(aid)
+            return self._json({"ok": True, "mode": "server", "actions": len(ACTIONS),
+                               "reportId": REPORT_ID, "gone": gone})
         return self._json({"ok": False, "reason": "not found"}, 404)
 
     def do_POST(self):  # noqa: N802
@@ -275,34 +342,25 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             return self._json({"ok": False, "reason": "bad json"}, 400)
 
-        route = self.path
+        route = urlsplit(self.path).path
         if route == "/api/delete":
             act = ACTIONS.get(req.get("id", ""))
             if not act:
                 return self._json({"ok": False, "reason": "未知或不可删除的项 id"}, 404)
-            perm = bool(req.get("perm"))
+            if req.get("perm") not in (None, False):
+                return self._json({"ok": False, "reason": "网页端已禁用彻底删除；请使用默认的废纸篓方式"}, 409)
             if act["kind"] == "trash":
                 for p in act["paths"]:
-                    why = protected_reason(p)
+                    _normalized, why = validated_target(p)
                     if why:
                         log_action({"op": "delete-blocked", "id": req.get("id"), "path": p, "reason": why})
                         return self._json({"ok": False, "reason": "已拦截：该项指向受保护的%s（%s）。系统数据/元数据不提供删除" % (why, p)}, 403)
             if act["kind"] == "cmd":
                 res = run_fixed_command(act["cmd"])
-            elif perm:
-                res = {"ok": True, "detail": ""}
-                for p in act["paths"]:
-                    res = permanent_remove(p)
-                    if not res["ok"]:
-                        break
             else:
-                res = {"ok": True, "detail": ""}
-                for p in act["paths"]:
-                    res = trash_move(p)
-                    if not res["ok"]:
-                        break
+                res = trash_many(act["paths"])
             log_action({"op": "delete", "id": req.get("id"), "name": act["name"],
-                        "perm": perm, "result": res})
+                        "perm": False, "result": res})
             return self._json(res)
 
         if route == "/api/open":
@@ -329,24 +387,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    try:
-        srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    except OSError:
-        # 端口被占：大概率是上一个实例还在跑，探测确认后直接打开页面
-        import urllib.request
+    srv = None
+    for port in range(BASE_PORT, BASE_PORT + PORT_SPAN):
         try:
-            with urllib.request.urlopen("http://127.0.0.1:%d/api/ping" % PORT, timeout=2) as r:
-                if json.loads(r.read()).get("ok"):
-                    print("服务器已在运行，直接打开报告页面…")
-                    webbrowser.open("http://127.0.0.1:%d/" % PORT)
-                    return
-        except Exception:  # noqa: BLE001
-            pass
-        print("端口 %d 被占用且不是本服务，请修改脚本里的 PORT。" % PORT)
+            srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            break
+        except OSError:
+            continue
+    if srv is None:
+        print("端口 %d-%d 均被占用，无法启动报告。" % (BASE_PORT, BASE_PORT + PORT_SPAN - 1))
         sys.exit(1)
 
     srv.daemon_threads = True
-    url = "http://127.0.0.1:%d/" % PORT
+    url = "http://127.0.0.1:%d/" % srv.server_port
     print("─" * 52)
     print("  磁盘清理报告服务器已启动")
     print("  页面地址: %s" % url)
@@ -355,7 +408,8 @@ def main():
     print("  记录文件: %s" % LOG_PATH)
     print("  停止: 按 Control-C")
     print("─" * 52)
-    threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    if os.environ.get("CLEANUP_REPORT_NO_BROWSER") != "1":
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
